@@ -1,0 +1,380 @@
+.saicf-chat-window {
+    font-family: Arial, sans-serif !important;
+}
+
+.saicf-chat-window p {
+    line-height: 1.3 !important;
+    font-size: 15px !important;
+    color: rgb(43, 43, 43) !important;
+    font-family: Arial, sans-serif !important;
+}
+
+.saicf-chat-widget-icon {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    color: white;
+    border-radius: 50%;
+    width: 75px;
+    height: 75px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    font-size: 36px;
+    z-index: 999998 !important;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Only apply pulsing if .pulsing class is added in JS */
+.pulsing {
+    animation: pulse 2s infinite;
+}
+
+.saicf-chat-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.saicf-chat-window {
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    width: 400px;
+    height: 550px;
+    background-color: transparent;
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: flex !important;
+    flex-direction: column;
+    z-index: 10000000 !important;
+    opacity: 0;
+    transform: translateY(100%);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.saicf-chat-window.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.hidden {
+    display: none;
+}
+
+.saicf-chat-header {
+    color: white;
+    padding: 10px;
+    padding-left: 15px;
+    padding-right: 15px;
+    border-radius: 16px 16px 0px 0px;
+    display: flex;
+    flex-direction: column;
+}
+
+.saicf-chat-header-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.saicf-logo-message-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.saicf-close-btn {
+    background: none;
+    border: none;
+    color: rgb(218, 43, 43);
+    margin: 0;
+    padding: 0;
+    outline: none;
+    cursor: pointer;
+}
+
+.saicf-close-chat-widget-icon {
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.saicf-close-chat-widget-icon:hover {
+    transform: scale(1.2);
+}
+
+.saicf-chat-body {
+    flex: 1;
+    padding: 8px;
+    padding-top: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+}
+
+.saicf-chat-footer {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    background-color: white;
+    gap: 8px;
+}
+
+.saicf-powered-by {
+    display: flex;
+    justify-content: center;
+}
+
+.saicf-powered-by-text {
+    font-size: 10px;
+    color: rgb(146, 146, 146);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.saicf-input-send-container {
+    display: flex;
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+}
+
+.saicf-chat-footer input {
+    flex: 1 !important;
+    padding: 7px !important;
+    border: 1px solid #ccc !important;
+    border-radius: 8px !important;
+    outline: none !important;
+    font-size: 15px !important;
+}
+
+.saicf-chat-footer button {
+    display: flex;
+    align-items: center;
+    margin-left: 6px;
+    padding-left: 15px;
+    padding-right: 15px;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background-color 0.4s ease, transform 0.2s ease;
+}
+
+.saicf-chat-footer button:hover {
+    background-color: #0595d3;
+    transform: translateY(-1.5px);
+}
+
+.saicf-widget-message {
+    max-width: 80%;
+    margin: 5px 0;
+    padding: 5px;
+    border-radius: 10px;
+    display: inline-block;
+}
+
+.widget-user-message {
+    align-self: flex-end !important;
+    color: white !important;
+    border-radius: 8px !important;
+    padding: 8px !important;
+    font-size: 15px !important;
+}
+
+.widget-bot-message {
+    align-self: flex-start !important;
+    background-color: #ffffff !important;
+    color: rgb(43, 43, 43) !important;
+    border-radius: 8px;
+    font-size: 15px !important;
+}
+
+/* Remove margins from first/last child in user/bot messages */
+.widget-user-message > :first-child,
+.widget-bot-message > :first-child {
+    margin: 0;
+}
+
+.widget-user-message > :last-child,
+.widget-bot-message > :last-child {
+    margin: 0;
+}
+
+.saicf-widget-send-icon {
+    font-size: 18px;
+    font-style: normal;
+}
+
+.saicf-loading-dots {
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    height: 40px;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+.saicf-loading-dots div {
+    width: 8px;
+    height: 8px;
+    margin: 0 4px;
+    border-radius: 50%;
+    animation: loading 0.6s infinite alternate;
+}
+
+@keyframes loading {
+    to {
+        opacity: 0.3;
+        transform: translateY(-8px);
+    }
+}
+
+.saicf-loading-dots div:nth-child(2) {
+    animation-delay: 0.2s;
+}
+.saicf-loading-dots div:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+/* Overriding alignment if config says left or elevated */
+.saicf-chat-widget-icon.align-left {
+    left: 25px !important;
+    right: auto !important;
+}
+.saicf-chat-widget-icon.elevated {
+    bottom: 55px !important; /* 25 + 30 = 55 */
+}
+
+.saicf-chat-window.align-left {
+    left: 20px !important;
+    right: auto !important;
+}
+
+.saicf-chat-window.elevated {
+    bottom: 50px !important; /* 20 + 30 = 50 */
+}
+
+/* table styles */
+.saicf-widget-message table {
+    border-collapse: separate;
+    border-spacing: 0px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    width: 100%;
+    overflow: auto;
+}
+
+.saicf-widget-message th, .saicf-widget-message td {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    padding: .35rem .50rem;
+    text-align: left;
+    font-size: 14px;
+}
+
+.saicf-widget-message th {
+    color: #000000;
+    background-color: rgba(0, 0, 0, 0.06);
+    border-right: 0;
+    padding: .5rem .50rem;
+}
+
+.saicf-widget-message th:last-child {
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.saicf-widget-message th {
+    border-bottom: none;
+}
+
+.saicf-widget-message td {
+    border-bottom: 0px solid rgba(0, 0, 0, 0.08);
+}
+
+.saicf-widget-message td {
+    border-right: 0px solid rgba(0, 0, 0, 0.08);
+}
+
+.saicf-widget-message td:last-child {
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.saicf-widget-message tr:first-child th:first-child {
+    border-top-left-radius: 8px; /* Rounded top left corner */
+}
+.saicf-widget-message tr:first-child th:last-child {
+    border-top-right-radius: 8px; /* Rounded top right corner */
+}
+.saicf-widget-message tr:last-child td:first-child {
+    border-bottom-left-radius: 8px; /* Rounded bottom left corner */
+}
+.saicf-widget-message tr:last-child td:last-child {
+    border-bottom-right-radius: 8px; /* Rounded bottom right corner */
+}
+
+.saicf-widget-message tr:last-child td {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08); /* Adds bottom border back on all cells of the last row */
+}
+/*Table style ending*/
+
+@media (max-width: 768px) {
+    .saicf-chat-overlay {
+        position: fixed;
+        background: rgba(0, 0, 0, 0.2);
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 999999;
+    }
+
+    .saicf-chat-window {
+        position: fixed;
+        left: 4%;
+        bottom: 1%;
+        width: 92%;
+        height: 90%;
+        border-radius: 16px;
+        transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    body.no-scroll {
+        overflow: hidden;
+    }
+
+    .saicf-close-chat-widget-icon {
+        font-size: 22px;
+    }
+
+    .saicf-chat-title {
+        font-size: 16px;
+    }
+
+    .widget-user-message {
+        font-size: 17px;
+    }
+
+    .widget-bot-message {
+        font-size: 17px;
+    }
+
+    .saicf-chat-widget-icon {
+        width: 70px;
+        height: 70px;
+    }
+}
