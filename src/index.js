@@ -70,8 +70,8 @@ async function initializeChatWidget() {
       right: 20px;
       color: white;
       border-radius: 50%;
-      width: 75px;
-      height: 75px;
+      width: 100px;
+      height: 100px;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -417,6 +417,7 @@ async function initializeChatWidget() {
   const welcomeMessage      = widgetConfig.welcome_message         || "Welcome to your virtual assistant! 😊 How can I assist you today?";
   const widgetHeaderText    = widgetConfig.header_text             || 'Chat with us!';
   const widgetBorderRadius  = widgetConfig.widget_border_radius    ?? 50;
+  const widgetSize          = widgetConfig.widget_size             ?? 75;
   const logo                = widgetConfig.header_icon_path        || null;
   const icon                = widgetConfig.widget_icon_path        || null;
 
@@ -448,6 +449,10 @@ async function initializeChatWidget() {
   }
   if (widgetBorderRadius != null) {
     chatWidgetIcon.style.borderRadius = `${widgetBorderRadius}%`;
+  }
+  if (widgetSize != null) {
+    chatWidgetIcon.style.height = `${widgetSize}px`;
+    chatWidgetIcon.style.width = `${widgetSize}px`;
   }
   if (icon) {
     chatWidgetIcon.innerHTML = `
