@@ -339,25 +339,29 @@ async function initializeChatWidget() {
     .saicf-pop-up-container {
       position: fixed;
       right: 20px;
-      bottom: calc(35px + var(--widget-size));
+      bottom: calc(30px + var(--widget-size));
       display: flex;
       flex-direction: column;
       gap: 8px;
       z-index: 999999;
+    }
+    .saicf-pop-up-container.hidden {
+      pointer-events: none;
     }
     .saicf-pop-up-container.align-left {
       left: 25px !important;
       right: auto !important;
     }
     .saicf-pop-up-message {
-      background: #ffffff;
-      padding: 12px 16px;
+      background:rgb(250, 250, 250);
+      padding: 7px 10px;
       border-radius: 12px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-      font-size: 15px;
+      font-size: 14px;
       color: #000000;
       max-width: 300px;
       line-height: 1.3;
+      border: 1px solid rgb(232, 232, 232);
     }
     .saicf-pop-up-close{
       background:none;
@@ -438,7 +442,7 @@ async function initializeChatWidget() {
       }
       .saicf-pop-up-container {
         right: 20px;
-        bottom: calc(35px + var(--widget-size));
+        bottom: calc(30px + var(--widget-size));
       }
       .saicf-pop-up-container.align-left {
         left: 20px !important;
@@ -477,7 +481,6 @@ async function initializeChatWidget() {
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
   const headerFontColor     = widgetConfig.header_font_color       || '#ffffff';
-  const welcomeMessage      = widgetConfig.welcome_message;
   const welcomeMessages     = widgetConfig.welcome_message
             ? Array.isArray(widgetConfig.welcome_message)
               ? widgetConfig.welcome_message
@@ -578,6 +581,17 @@ async function initializeChatWidget() {
   const popUpCloseBtn = document.createElement('button');
   popUpCloseBtn.className = 'saicf-pop-up-close';
   popUpCloseBtn.textContent = 'X';
+  popUpCloseBtn.style.backgroundColor = themeColor;
+  popUpCloseBtn.style.color = headerFontColor;
+  popUpCloseBtn.style.borderRadius = '50%';
+  popUpCloseBtn.style.padding = '0px';
+  popUpCloseBtn.style.width = '22px';
+  popUpCloseBtn.style.height = '22px';
+  popUpCloseBtn.style.display = 'flex';
+  popUpCloseBtn.style.alignItems = 'center';
+  popUpCloseBtn.style.justifyContent = 'center';
+  popUpCloseBtn.style.fontSize = '14px';
+  popUpCloseBtn.style.fontWeight = '600';
   popUpContainer.appendChild(popUpCloseBtn);
 
   welcomeMessages.forEach(msg => {
