@@ -492,7 +492,7 @@ async function initializeChatWidget() {
   const widgetSize          = widgetConfig.widget_size             ?? 75;
   const logo                = widgetConfig.header_icon_path        || null;
   const icon                = widgetConfig.widget_icon_path        || null;
-  const popUpDelaySeconds   = widgetConfig.pop_up_delay_seconds    ?? 3;
+  const popUpDelaySeconds   = widgetConfig.pop_up_delay_seconds    ?? 2;
 
   let isPulsing = false;
   if (typeof widgetConfig.pulsing === 'boolean') {
