@@ -418,7 +418,7 @@ async function initializeChatWidget() {
         left: 4%;
         bottom: 1%;
         width: 92%;
-        height: 82%;
+        height: 87%;
         border-radius: 16px;
         transition: opacity 0.6s ease, transform 0.6s ease;
       }
