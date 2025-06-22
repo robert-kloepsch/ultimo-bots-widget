@@ -2,7 +2,6 @@
  * index.js
  * Renders the chat widget in a Shadow DOM at #chat-widget-container
  *********************************************************/
-// console.log('Chat widget script loaded');
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeChatWidget);
 } else {
@@ -10,7 +9,6 @@ if (document.readyState === 'loading') {
 }
 
 async function initializeChatWidget() {
-  // Grab the container
   const container = document.getElementById('chat-widget-container');
   if (!container) {
     console.error('Chat widget container not found');
@@ -30,7 +28,6 @@ async function initializeChatWidget() {
     return;
   }
 
-  // Attach a shadow root to #chat-widget-container
   const shadowRoot = container.attachShadow({ mode: 'open' });
 
   if (!document.getElementById('saicf-global-scroll-style')) {
@@ -50,7 +47,6 @@ async function initializeChatWidget() {
     document.head.appendChild(globalScrollStyle);
   }
 
-  // Insert all widget CSS into the shadow root
   const styleTag = document.createElement('style');
   styleTag.textContent = `
     /**********************************************************
@@ -58,6 +54,10 @@ async function initializeChatWidget() {
      **********************************************************/
     :host, .saicf-chat-window, .saicf-chat-window * {
       font-family: "DM Sans", sans-serif !important;
+    }
+
+    :host {
+      --widget-size: 80px; /* fallback – will be overwritten by JS */
     }
 
     .saicf-chat-window p {
@@ -277,16 +277,15 @@ async function initializeChatWidget() {
       right: auto !important;
     }
     .saicf-chat-widget-icon.elevated {
-      bottom: 55px !important; /* 20 + 35 = 55 */
+      bottom: 55px !important;
     }
     .saicf-chat-window.align-left {
       left: 20px !important;
       right: auto !important;
     }
     .saicf-chat-window.elevated {
-      bottom: 12px !important; /* 12 + 38 = 50 */
+      bottom: 12px !important;
     }
-    /* table styles */
     .saicf-widget-message table {
       border-collapse: separate;
       border-spacing: 0px;
@@ -340,7 +339,7 @@ async function initializeChatWidget() {
     .saicf-pop-up-container {
       position: fixed;
       right: 20px;
-      bottom: calc(20px + 80px); /* icon bottom + icon height + gap */
+      bottom: calc(35px + var(--widget-size));
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -379,10 +378,9 @@ async function initializeChatWidget() {
       transform:scale(1.08);
     }
 
-    /* close button is hidden until JS adds .show */
     .saicf-pop-up-close{
       opacity:0;
-      pointer-events:none;           /* prevent stray clicks */
+      pointer-events:none;
       transition:opacity .3s ease;
     }
     .saicf-pop-up-close.show{
@@ -390,14 +388,11 @@ async function initializeChatWidget() {
       pointer-events:auto;
     }
 
-    /* pop-ups start invisible */
     .saicf-pop-up-message{
       opacity:0;
       transform:translateY(6px);
       transition:opacity .4s ease, transform .4s ease;
     }
-
-    /* applied by JS, fades / slides each balloon in */
     .saicf-pop-up-message.show{
       opacity:1;
       transform:translateY(0);
@@ -443,7 +438,7 @@ async function initializeChatWidget() {
       }
       .saicf-pop-up-container {
         right: 20px;
-        bottom: calc(15px + 80px);
+        bottom: calc(35px + var(--widget-size));
       }
       .saicf-pop-up-container.align-left {
         left: 20px !important;
@@ -453,14 +448,10 @@ async function initializeChatWidget() {
   `;
   shadowRoot.appendChild(styleTag);
 
-  // Container for the widget elements (icon, chat window, etc.)
-  // This is separate from #chat-widget-container so we can easily
-  // attach children inside the shadow root.
   const widgetRoot = document.createElement('div');
   widgetRoot.id = 'widget-root';
   shadowRoot.appendChild(widgetRoot);
 
-  // If you use 'marked' for markdown, set your options:
   if (typeof marked !== 'undefined') {
     marked.setOptions({
       gfm: true,
@@ -469,15 +460,11 @@ async function initializeChatWidget() {
     });
   }
 
-  /**********************************************************
-   * Helper function
-   **********************************************************/
   function getBrowserLanguage() {
     return navigator.language || navigator.userLanguage || 'en';
   }
   const browserLanguage = getBrowserLanguage();
 
-  // Fetch widget configuration
   let widgetConfig = {};
   try {
     const response = await fetch(`http://localhost:5000/api/widget_configuration/${botId}`);
@@ -487,13 +474,10 @@ async function initializeChatWidget() {
   }
   console.log(widgetConfig.welcome_message)
 
-  /**********************************************************
-   * Extract config values
-   **********************************************************/
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
   const headerFontColor     = widgetConfig.header_font_color       || '#ffffff';
-  const welcomeMessage      = widgetConfig.welcome_message
+  const welcomeMessage      = widgetConfig.welcome_message;
   const welcomeMessages     = widgetConfig.welcome_message
             ? Array.isArray(widgetConfig.welcome_message)
               ? widgetConfig.welcome_message
@@ -506,7 +490,6 @@ async function initializeChatWidget() {
   const icon                = widgetConfig.widget_icon_path        || null;
   const popUpDelaySeconds   = widgetConfig.pop_up_delay_seconds    ?? 2;
 
-  // Pulsing
   let isPulsing = false;
   if (typeof widgetConfig.pulsing === 'boolean') {
     isPulsing = widgetConfig.pulsing;
@@ -514,20 +497,14 @@ async function initializeChatWidget() {
     isPulsing = widgetConfig.pulsing.toLowerCase() === 'true';
   }
 
-  // Alignment
-  const horizontalAlignment = widgetConfig.widget_horizontal_alignment || 'right'; // 'left' or 'right'
-  const verticalAlignment   = widgetConfig.widget_vertical_alignment   || 'bottom'; // 'bottom' or 'elevated'
+  const horizontalAlignment = widgetConfig.widget_horizontal_alignment || 'right';
+  const verticalAlignment   = widgetConfig.widget_vertical_alignment   || 'bottom';
 
-  /**********************************************************
-   * Build DOM elements inside Shadow DOM
-   **********************************************************/
-  // 1. Chat icon
   const chatWidgetIcon = document.createElement('div');
   chatWidgetIcon.className = 'saicf-chat-widget-icon';
   if (isPulsing) {
     chatWidgetIcon.classList.add('pulsing');
   }
-  // If no icon, default background color. Otherwise show custom icon
   if (!icon) {
     chatWidgetIcon.style.backgroundColor = themeColor;
     chatWidgetIcon.style.paddingBottom = '1px';
@@ -538,29 +515,26 @@ async function initializeChatWidget() {
   if (widgetSize != null) {
     chatWidgetIcon.style.height = `${widgetSize}px`;
     chatWidgetIcon.style.width = `${widgetSize}px`;
+
+    container.style.setProperty('--widget-size', `${widgetSize}px`);
   }
   if (icon) {
     chatWidgetIcon.innerHTML = `
       <img
         src="${icon}"
         alt="Widget Icon"
-        style="max-width: 100%; max-height: 100%; border-radius: ${widgetBorderRadius}%;"
-      />
+        style="max-width: 100%; max-height: 100%; border-radius: ${widgetBorderRadius}%;">
     `;
   } else {
-    // A fallback SVG
     chatWidgetIcon.innerHTML = ``;
   }
 
-  // 2. Overlay
   const chatOverlay = document.createElement('div');
   chatOverlay.className = 'saicf-chat-overlay hidden';
 
-  // 3. Chat window
   const chatWindow = document.createElement('div');
   chatWindow.className = 'saicf-chat-window hidden';
 
-  // Build the header HTML
   const logoHTML = logo
     ? `<img src="${logo}" alt="Chat Logo"
          style="height:24px;width:24px;border-radius:50%;object-fit:cover;"/>`
@@ -598,31 +572,26 @@ async function initializeChatWidget() {
     </div>
   `;
 
-  // 4. Pop-up container (initially hidden)
   const popUpContainer = document.createElement('div');
   popUpContainer.className = 'saicf-pop-up-container hidden';
 
-  // Close button for pop-up
   const popUpCloseBtn = document.createElement('button');
   popUpCloseBtn.className = 'saicf-pop-up-close';
   popUpCloseBtn.textContent = 'X';
   popUpContainer.appendChild(popUpCloseBtn);
 
-  // Add each pop-up message
-  welcomeMessage.forEach(msg => {
+  welcomeMessages.forEach(msg => {
     const msgEl = document.createElement('div');
     msgEl.className = 'saicf-pop-up-message';
     msgEl.textContent = msg;
     popUpContainer.appendChild(msgEl);
   });
 
-  // Append elements to the shadow root
   widgetRoot.appendChild(chatWidgetIcon);
   widgetRoot.appendChild(chatOverlay);
   widgetRoot.appendChild(chatWindow);
   widgetRoot.appendChild(popUpContainer);
 
-  // 5. Alignment
   if (horizontalAlignment === 'left') {
     chatWidgetIcon.classList.add('align-left');
     chatWindow.classList.add('align-left');
@@ -633,7 +602,6 @@ async function initializeChatWidget() {
     chatWindow.classList.add('elevated');
   }
 
-  // 6. Inject dynamic styles (for hoverColor, themeColor, etc.)
   const dynamicStyleEl = document.createElement('style');
   dynamicStyleEl.textContent = `
     .saicf-chat-footer button:hover {
@@ -648,9 +616,6 @@ async function initializeChatWidget() {
   `;
   shadowRoot.appendChild(dynamicStyleEl);
 
-  /**********************************************************
-   * Handlers
-   **********************************************************/
   const closeChatBtn   = chatWindow.querySelector('.saicf-close-btn');
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer input');
@@ -660,7 +625,6 @@ async function initializeChatWidget() {
   let widgetOpenedOnce = false;
 
   chatWidgetIcon.addEventListener('click', () => {
-    // Show chat window
     chatWindow.classList.remove('hidden');
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
@@ -668,13 +632,11 @@ async function initializeChatWidget() {
     if (window.matchMedia('(max-width: 768px)').matches) {
       document.body.classList.add('no-scroll');
     }
-    // If no messages yet, show welcome
     if (chatBody.childElementCount === 0) {
-      welcomeMessage.forEach(msg => {
+      welcomeMessages.forEach(msg => {
         appendMessage(msg, 'bot');
       });
     }
-    // Mark widget as opened and hide any pop-ups
     widgetOpenedOnce = true;
     hidePopUp();
   });
@@ -699,9 +661,6 @@ async function initializeChatWidget() {
     widgetOpenedOnce = true;
   });
 
-  /**********************************************************
-   * Pop-up show / hide helpers
-   **********************************************************/
   function showPopUpSequentially() {
     if (widgetOpenedOnce) return;
     popUpContainer.classList.remove('hidden');
@@ -721,14 +680,12 @@ async function initializeChatWidget() {
     popUpContainer.classList.add('hidden');
     popUpContainer.querySelectorAll('.saicf-pop-up-message')
                   .forEach(m => m.classList.remove('show'));
-    popUpCloseBtn.classList.remove('show');   // hide the X again
+    popUpCloseBtn.classList.remove('show');
   }
 
-  // Auto-show pop-up after delay
   setTimeout(showPopUpSequentially, popUpDelaySeconds * 1000);
 
   function forceReflow(element) {
-    // Force a reflow for transition
     void element.offsetHeight;
   }
 
@@ -775,7 +732,7 @@ async function initializeChatWidget() {
               isFirstMessage = false;
               clearTimeout(timeoutId);
             }
-            const parsedChunk = chunk.replace(/<newline>/g, '\\n');
+            const parsedChunk = chunk.replace(/<newline>/g, '\n');
             currentBotMessage += parsedChunk;
             updateBotMessage(currentBotMessage);
             scrollToBottom();
@@ -783,14 +740,12 @@ async function initializeChatWidget() {
         };
 
         eventSource.onerror = (error) => {
-          console.error('Error fetching response:', error);
           if (isFirstMessage) {
             reject(new Error('Failed to get response from server.'));
           }
           eventSource.close();
         };
 
-        // Listen for custom 'end' event
         eventSource.addEventListener('end', () => {
           updateBotMessage(currentBotMessage);
           eventSource.close();
@@ -815,7 +770,6 @@ async function initializeChatWidget() {
           return;
         } catch (error) {
           retryCount++;
-          console.log(`Attempt ${retryCount} failed. Retrying...`);
           if (retryCount >= maxRetries) {
             setLoading(false);
             appendMessage(`Failed to get response after ${maxRetries} attempts.`, 'bot');
@@ -828,7 +782,6 @@ async function initializeChatWidget() {
     try {
       await retryConnection();
     } catch (error) {
-      console.error('Error fetching response:', error);
       setLoading(false);
     }
   }
