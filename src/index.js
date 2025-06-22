@@ -354,10 +354,10 @@ async function initializeChatWidget() {
     }
     .saicf-pop-up-message {
       background:rgb(250, 250, 250);
-      padding: 7px 10px;
+      padding: 8px 12px;
       border-radius: 12px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-      font-size: 14px;
+      font-size: 15px;
       color: #000000;
       max-width: 320px;
       line-height: 1.3;
@@ -418,7 +418,7 @@ async function initializeChatWidget() {
         left: 4%;
         bottom: 1%;
         width: 92%;
-        height: 90%;
+        height: 82%;
         border-radius: 16px;
         transition: opacity 0.6s ease, transform 0.6s ease;
       }
@@ -448,6 +448,10 @@ async function initializeChatWidget() {
       .saicf-pop-up-container.align-left {
         left: 20px !important;
         right: auto !important;
+      }
+      .saicf-pop-up-message {
+        padding: 7px 10px;
+        font-size: 14px;
       }
     }
   `;
