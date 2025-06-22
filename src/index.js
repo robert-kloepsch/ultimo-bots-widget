@@ -357,7 +357,7 @@ async function initializeChatWidget() {
       padding: 8px 12px;
       border-radius: 12px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-      font-size: 15px;
+      font-size: 16px;
       color: #000000;
       max-width: 320px;
       line-height: 1.3;
