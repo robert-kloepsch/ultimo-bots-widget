@@ -359,7 +359,7 @@ async function initializeChatWidget() {
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
       font-size: 14px;
       color: #000000;
-      max-width: 300px;
+      max-width: 320px;
       line-height: 1.3;
       border: 1px solid rgb(232, 232, 232);
     }
@@ -491,7 +491,7 @@ async function initializeChatWidget() {
   const widgetSize          = widgetConfig.widget_size             ?? 75;
   const logo                = widgetConfig.header_icon_path        || null;
   const icon                = widgetConfig.widget_icon_path        || null;
-  const popUpDelaySeconds   = widgetConfig.pop_up_delay_seconds    ?? 2;
+  const popUpDelaySeconds   = widgetConfig.pop_up_delay_seconds    ?? 3;
 
   let isPulsing = false;
   if (typeof widgetConfig.pulsing === 'boolean') {
