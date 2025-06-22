@@ -467,7 +467,7 @@ async function initializeChatWidget() {
 
   let widgetConfig = {};
   try {
-    const response = await fetch(`http://localhost:5000/api/widget_configuration/${botId}`);
+    const response = await fetch(`https://portal.ultimo-bots.com/api/widget_configuration/${botId}`);
     widgetConfig = await response.json();
   } catch (error) {
     console.error('Error fetching widget configuration:', error);
