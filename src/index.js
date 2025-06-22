@@ -362,6 +362,7 @@ async function initializeChatWidget() {
       max-width: 320px;
       line-height: 1.3;
       border: 1px solid rgb(232, 232, 232);
+      cursor: pointer;
     }
     .saicf-pop-up-close{
       background:none;
@@ -599,6 +600,27 @@ async function initializeChatWidget() {
     msgEl.className = 'saicf-pop-up-message';
     msgEl.textContent = msg;
     popUpContainer.appendChild(msgEl);
+
+    // ✅ Click opens chat exactly like the widget icon
+    msgEl.addEventListener('click', () => {
+      chatWindow.classList.remove('hidden');
+      forceReflow(chatWindow);
+      chatWindow.classList.add('show');
+      chatOverlay.classList.remove('hidden');
+
+      if (window.matchMedia('(max-width: 768px)').matches) {
+        document.body.classList.add('no-scroll');
+      }
+
+      if (chatBody.childElementCount === 0) {
+        welcomeMessages.forEach(msg => {
+          appendMessage(msg, 'bot');
+        });
+      }
+
+      widgetOpenedOnce = true;
+      hidePopUp();
+    });
   });
 
   widgetRoot.appendChild(chatWidgetIcon);
