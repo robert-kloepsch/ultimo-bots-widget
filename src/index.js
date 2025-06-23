@@ -497,6 +497,7 @@ async function initializeChatWidget() {
   const logo                = widgetConfig.header_icon_path        || null;
   const icon                = widgetConfig.widget_icon_path        || null;
   const popUpDelaySeconds   = widgetConfig.pop_up_delay_seconds    ?? 2;
+  const popUpMessages       = widgetConfig.pop_up_messages         ?? false;
 
   let isPulsing = false;
   if (typeof widgetConfig.pulsing === 'boolean') {
@@ -1233,7 +1234,7 @@ async function initializeChatWidget() {
   popUpCloseBtn.style.display = 'flex';
   popUpCloseBtn.style.alignItems = 'center';
   popUpCloseBtn.style.justifyContent = 'center';
-  popUpCloseBtn.style.fontSize = '14px';
+  popUpCloseBtn.style.fontSize = '13px';
   popUpCloseBtn.style.fontWeight = '600';
   popUpContainer.appendChild(popUpCloseBtn);
 
@@ -1361,7 +1362,9 @@ async function initializeChatWidget() {
     popUpCloseBtn.classList.remove('show');
   }
 
-  setTimeout(showPopUpSequentially, popUpDelaySeconds * 1000);
+  if (popUpMessages) {
+    setTimeout(showPopUpSequentially, popUpDelaySeconds * 1000);
+  }
 
   function forceReflow(element) {
     void element.offsetHeight;
