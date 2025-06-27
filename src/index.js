@@ -9,24 +9,39 @@ if (document.readyState === 'loading') {
 }
 
 async function initializeChatWidget() {
+  /************  SEO / PERFORMANCE ADD-ON ① : pre-connect  ***********/
+  ['https://portal.ultimo-bots.com', 'https://cdn.jsdelivr.net']
+    .forEach(h => {
+      if (!document.querySelector(`link[rel="preconnect"][href="${h}"]`)) {
+        const l = document.createElement('link');
+        l.rel = 'preconnect'; l.href = h; l.crossOrigin = ''; document.head.appendChild(l);
+      }
+    });
+  /*******************************************************************/
+
+  let markedReady = typeof marked !== 'undefined';
+
+  async function ensureMarked() {
+    if (markedReady) return;
+
+    // 👇 tell Webpack to leave this dynamic import alone
+    const mod = await import(/* webpackIgnore: true */
+      'https://cdn.jsdelivr.net/npm/marked@11.1.1/lib/marked.esm.js');
+
+    mod.marked.setOptions({ gfm: true, breaks: true, headerIds: false });
+    globalThis.marked = mod.marked;
+    markedReady = true;
+  }
+
   const container = document.getElementById('chat-widget-container');
-  if (!container) {
-    console.error('Chat widget container not found');
-    return;
-  }
+  if (!container) { console.error('Chat widget container not found'); return; }
 
-  if (container.parentElement !== document.body) {
-    document.body.appendChild(container);
-  }
-
+  if (container.parentElement !== document.body) document.body.appendChild(container);
   container.style.position = 'relative';
   container.style.zIndex  = '2147483647';
 
   const botId = container.getAttribute('data-user-id');
-  if (!botId) {
-    console.error('User ID not found (data-user-id is missing)');
-    return;
-  }
+  if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
 
   const shadowRoot = container.attachShadow({ mode: 'open' });
 
@@ -469,19 +484,21 @@ async function initializeChatWidget() {
     });
   }
 
-  function getBrowserLanguage() {
-    return navigator.language || navigator.userLanguage || 'en';
-  }
-  const browserLanguage = getBrowserLanguage();
-
+  const cfgKey = `ub_cfg_${botId}`;
+  const cfgTTL = 1000 * 60 * 60 * 6;
   let widgetConfig = {};
   try {
-    const response = await fetch(`https://portal.ultimo-bots.com/api/widget_configuration/${botId}`);
-    widgetConfig = await response.json();
-  } catch (error) {
-    console.error('Error fetching widget configuration:', error);
+    const cached = JSON.parse(localStorage.getItem(cfgKey) || 'null');
+    if (cached && (Date.now() - cached.ts) < cfgTTL) {
+      widgetConfig = cached.data;
+    } else {
+      const res = await fetch(`https://portal.ultimo-bots.com/api/widget_configuration/${botId}`);
+      widgetConfig = await res.json();
+      localStorage.setItem(cfgKey, JSON.stringify({ ts: Date.now(), data: widgetConfig }));
+    }
+  } catch (e) {
+    console.error('Error fetching widget configuration:', e);
   }
-  console.log(widgetConfig.welcome_message)
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
@@ -1173,7 +1190,7 @@ async function initializeChatWidget() {
             z"/>
             </svg>
         </div>
-    `;
+`;
   }
 
   const chatOverlay = document.createElement('div');
@@ -1246,6 +1263,7 @@ async function initializeChatWidget() {
 
     // ✅ Click opens chat exactly like the widget icon
     msgEl.addEventListener('click', () => {
+      ensureMarked();
       chatWindow.classList.remove('hidden');
       forceReflow(chatWindow);
       chatWindow.classList.add('show');
@@ -1304,6 +1322,7 @@ async function initializeChatWidget() {
   let widgetOpenedOnce = false;
 
   chatWidgetIcon.addEventListener('click', () => {
+    ensureMarked();
     chatWindow.classList.remove('hidden');
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
