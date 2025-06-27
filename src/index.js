@@ -484,18 +484,12 @@ async function initializeChatWidget() {
     });
   }
 
-  const cfgKey = `ub_cfg_${botId}`;
-  const cfgTTL = 1000 * 60 * 60 * 6;
   let widgetConfig = {};
   try {
-    const cached = JSON.parse(localStorage.getItem(cfgKey) || 'null');
-    if (cached && (Date.now() - cached.ts) < cfgTTL) {
-      widgetConfig = cached.data;
-    } else {
-      const res = await fetch(`https://portal.ultimo-bots.com/api/widget_configuration/${botId}`);
-      widgetConfig = await res.json();
-      localStorage.setItem(cfgKey, JSON.stringify({ ts: Date.now(), data: widgetConfig }));
-    }
+    const res = await fetch(`https://portal.ultimo-bots.com/api/widget_configuration/${botId}`, {
+      cache: 'no-store',
+    });
+    widgetConfig = await res.json();
   } catch (e) {
     console.error('Error fetching widget configuration:', e);
   }
