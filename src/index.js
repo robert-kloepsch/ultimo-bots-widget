@@ -2,11 +2,40 @@
  * index.js
  * Renders the chat widget in a Shadow DOM at #chat-widget-container
  *********************************************************/
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeChatWidget);
-} else {
-  initializeChatWidget();
-}
+(function bootstrap() {
+  const POLL_INTERVAL = 200;   // ms between checks
+  const MAX_WAIT      = 30000; // safety timeout
+
+  let waited = 0;
+
+  function tryStart() {
+    const container = document.getElementById('chat-widget-container');
+
+    // When both the element and data-user-id are present we can go
+    if (container && container.getAttribute('data-user-id')) {
+      initializeChatWidget();
+      return;
+    }
+
+    // Otherwise keep polling (up to MAX_WAIT)
+    if (waited < MAX_WAIT) {
+      waited += POLL_INTERVAL;
+      setTimeout(tryStart, POLL_INTERVAL);
+    } else {
+      console.error(
+        'Chat widget bootstrap: #chat-widget-container not found ' +
+        `after ${MAX_WAIT / 1000}s - widget aborted`
+      );
+    }
+  }
+
+  // Start polling as soon as the DOM is available
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryStart);
+  } else {
+    tryStart();
+  }
+})();
 
 async function initializeChatWidget() {
   /************  SEO / PERFORMANCE ADD-ON ① : pre-connect  ***********/
