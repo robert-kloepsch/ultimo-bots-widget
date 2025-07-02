@@ -396,6 +396,11 @@ async function initializeChatWidget() {
       left: 25px !important;
       right: auto !important;
     }
+
+    .saicf-pop-up-container.elevated {
+      bottom: calc(65px + var(--widget-size));   /* 55 px (icon) + 10 px gap */
+    }
+
     .saicf-pop-up-message {
       background:rgb(250, 250, 250);
       padding: 8px 12px;
@@ -1320,6 +1325,7 @@ async function initializeChatWidget() {
   if (verticalAlignment === 'elevated') {
     chatWidgetIcon.classList.add('elevated');
     chatWindow.classList.add('elevated');
+    popUpContainer.classList.add('elevated');
   }
 
   const dynamicStyleEl = document.createElement('style');
