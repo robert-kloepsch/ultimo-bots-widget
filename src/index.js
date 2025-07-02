@@ -526,6 +526,7 @@ async function initializeChatWidget() {
     widgetConfig = await res.json();
   } catch (e) {
     console.error('Error fetching widget configuration:', e);
+    return;
   }
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
