@@ -518,15 +518,20 @@ async function initializeChatWidget() {
     });
   }
 
-  let widgetConfig = {};
+  let widgetConfig;
   try {
-    const res = await fetch(`https://portal.ultimo-bots.com/api/widget_configuration/${botId}`, {
-      cache: 'no-store',
-    });
-    widgetConfig = await res.json();
-  } catch (e) {
-    console.error('Error fetching widget configuration:', e);
-    return;
+    const res = await fetch(
+      `https://portal.ultimo-bots.com/api/widget_configuration/${botId}`,
+      { cache: 'no-store' }
+    );
+
+    if (!res.ok) {                    // 404 / 500 etc.
+      throw new Error(`HTTP ${res.status}`);
+    }
+    widgetConfig = await res.json();  // may still throw on invalid JSON
+  } catch (err) {
+    console.error('Widget config load failed – widget aborted', err);
+    return;                           // ⟵ ABORT, build nothing
   }
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
