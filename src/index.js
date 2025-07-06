@@ -1255,9 +1255,13 @@ async function initializeChatWidget() {
     <div class="saicf-chat-body"></div>
     <div class="saicf-chat-footer">
       <div class="saicf-powered-by">
-        <span class="saicf-powered-by-text" onclick="window.open('http://ultimo-bots.com/', '_blank')">
+        <a class="saicf-powered-by-text"
+          href="https://www.ultimo-bots.com"
+          target="_blank"
+          rel="noopener"
+          title="Our website uses intelligent chatbots powered by Ultimo Bots to improve customer service.">
           Powered by Ultimo Bots
-        </span>
+        </a>
       </div>
       <div class="saicf-input-send-container">
         <input type="text" class="saicf-chat-input" placeholder="Type your message...">
