@@ -73,6 +73,7 @@ async function initializeChatWidget() {
   if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
 
   const shadowRoot = container.attachShadow({ mode: 'open' });
+  shadowRoot.host.setAttribute('lang', 'en');
 
   if (!document.getElementById('saicf-global-scroll-style')) {
     const globalScrollStyle = document.createElement('style');
