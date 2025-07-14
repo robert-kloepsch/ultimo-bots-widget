@@ -188,10 +188,12 @@ async function initializeChatWidget() {
       cursor: pointer;
     }
     .saicf-close-chat-widget-icon {
-      font-size: 20px;
-      font-weight: 600;
       cursor: pointer;
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+    .saicf-close-chat-widget-icon .fa-xmark,
+    .saicf-close-chat-widget-icon svg {
+      font-size: 1.6rem;   /* or whatever looks right */
     }
     .saicf-close-chat-widget-icon:hover {
       transform: scale(1.2);
@@ -208,7 +210,7 @@ async function initializeChatWidget() {
     .saicf-chat-footer {
       display: flex;
       flex-direction: column;
-      padding: 10px;
+      // padding: 10px;
       background-color: white;
       gap: 8px;
     }
@@ -224,8 +226,9 @@ async function initializeChatWidget() {
     }
     .saicf-input-send-container {
       display: flex;
-      border-top: 1px solid #ccc;
-      padding-top: 10px;
+      border-top: 1px solid #f1f1f1;
+      padding: 10px;
+      background-color: #fafafa;
     }
     .saicf-chat-footer input {
       flex: 1 !important;
@@ -418,25 +421,21 @@ async function initializeChatWidget() {
       background:none;
       border:none;
       outline:none;
-      font-size:17px;
       font-weight:500;
       color:rgb(163,163,163);
       align-self:flex-end;
       cursor:pointer;
-      margin-top:-4px;
       margin-bottom:0;
-      transform:scale(1);
-      transition:transform 0.5s ease;
+      transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
     .saicf-pop-up-close:hover{
-      transform:scale(1.08);
+      transform: scale(1.05);
     }
 
     .saicf-pop-up-close{
       opacity:0;
       pointer-events:none;
-      transition:opacity .3s ease;
     }
     .saicf-pop-up-close.show{
       opacity:1;
@@ -1245,8 +1244,10 @@ async function initializeChatWidget() {
           ${logoHTML}
           <span class="saicf-chat-title" style="color:${headerFontColor};">${widgetHeaderText}</span>
         </div>
-        <button class="saicf-close-btn saicf-close-chat-widget-icon" style="color:${headerFontColor};">
-          X
+        <button class="saicf-close-btn saicf-close-chat-widget-icon" aria-label="Close chat" style="color:${headerFontColor};">
+          <svg viewBox="0 0 384 512" style="height:1em;width:1em;fill:currentColor;">
+            <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
+          </svg>
         </button>
       </div>
     </div>
@@ -1280,18 +1281,20 @@ async function initializeChatWidget() {
 
   const popUpCloseBtn = document.createElement('button');
   popUpCloseBtn.className = 'saicf-pop-up-close';
-  popUpCloseBtn.textContent = 'X';
+  popUpCloseBtn.innerHTML = `
+    <svg viewBox="0 0 384 512" style="height:1.3em;width:1.3em;fill:currentColor;">
+      <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
+    </svg>
+  `;
   popUpCloseBtn.style.backgroundColor = themeColor;
   popUpCloseBtn.style.color = headerFontColor;
   popUpCloseBtn.style.borderRadius = '50%';
   popUpCloseBtn.style.padding = '0px';
-  popUpCloseBtn.style.width = '22px';
-  popUpCloseBtn.style.height = '22px';
+  popUpCloseBtn.style.width = '24px';
+  popUpCloseBtn.style.height = '24px';
   popUpCloseBtn.style.display = 'flex';
   popUpCloseBtn.style.alignItems = 'center';
   popUpCloseBtn.style.justifyContent = 'center';
-  popUpCloseBtn.style.fontSize = '13px';
-  popUpCloseBtn.style.fontWeight = '600';
   popUpContainer.appendChild(popUpCloseBtn);
 
   welcomeMessages.forEach(msg => {
