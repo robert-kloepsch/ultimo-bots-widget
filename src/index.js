@@ -554,13 +554,13 @@ async function initializeChatWidget() {
       { cache: 'no-store' }
     );
 
-    if (!res.ok) {                    // 404 / 500 etc.
+    if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
-    widgetConfig = await res.json();  // may still throw on invalid JSON
+    widgetConfig = await res.json();
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
-    return;                           // ⟵ ABORT, build nothing
+    return;
   }
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
@@ -887,7 +887,7 @@ async function initializeChatWidget() {
     setLoading(true);
 
     let currentBotMessage = '';
-    const maxRetries = 3;
+    const maxRetries = 5;
     let retryCount = 0;
 
     const attemptConnection = () => {
@@ -933,7 +933,7 @@ async function initializeChatWidget() {
             eventSource.close();
             reject(new Error('No response received from server.'));
           }
-        }, 8000);
+        }, 10000);
       });
     };
 
