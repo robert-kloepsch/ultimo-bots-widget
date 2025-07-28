@@ -887,7 +887,7 @@ async function initializeChatWidget() {
     setLoading(true);
 
     let currentBotMessage = '';
-    const maxRetries = 5;
+    const maxRetries = 3;
     let retryCount = 0;
 
     const attemptConnection = () => {
@@ -933,7 +933,7 @@ async function initializeChatWidget() {
             eventSource.close();
             reject(new Error('No response received from server.'));
           }
-        }, 10000);
+        }, 20000);
       });
     };
 
