@@ -452,6 +452,35 @@ async function initializeChatWidget() {
       transform:translateY(0);
     }
 
+    /* ───────── predefined-question chips ───────── */
+    .saicf-predefined-container{
+      display:flex;
+      flex-wrap:wrap-reverse;
+      justify-content: flex-end;
+      gap:8px;
+      padding:6px 10px;
+      padding-bottom: 0;
+    }
+
+    .saicf-predefined-container::-webkit-scrollbar{display:none;}
+
+    .saicf-predefined-question{
+      flex:0 0 auto;
+      border: 1px solid #e8e8e8ff;
+      background: transparent;
+      color:#333;
+      border-radius:20px;
+      padding:6px 12px;
+      font-size:14px;
+      white-space:nowrap;
+      cursor:pointer;
+      transition:background-color .25s,transform .2s;
+    }
+    .saicf-predefined-question:hover{
+      background: #f1f1f1ff;
+      transform:translateY(-1px);
+    }
+
     @media (max-width: 768px) {
       .saicf-chat-overlay {
         position: fixed;
@@ -623,6 +652,8 @@ async function initializeChatWidget() {
     ${headerHTML}
     <div class="saicf-chat-body"></div>
     <div class="saicf-chat-footer">
+      <!-- ⇣⇣ new: predefined-question chips ⇣⇣ -->
+      <div class="saicf-predefined-container hidden"></div>
       <div class="saicf-powered-by">
         <a class="saicf-powered-by-text"
           href="https://www.ultimo-bots.com"
@@ -727,6 +758,39 @@ async function initializeChatWidget() {
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer input');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
+
+  /* ───────── predefined‑question chips ───────── */
+  const predefinedContainer = chatWindow.querySelector('.saicf-predefined-container');
+
+  let predefinedQuestions = widgetConfig.predefined_questions ?? [];
+  try {
+    if (typeof predefinedQuestions === 'string') {
+      predefinedQuestions = JSON.parse(predefinedQuestions);
+    }
+  } catch {}
+
+  const hasRealQuestions =
+    Array.isArray(predefinedQuestions) &&
+    (predefinedQuestions.length > 1 ||
+    (predefinedQuestions.length === 1 && predefinedQuestions[0].trim() !== ''));
+
+  if (hasRealQuestions) {
+    predefinedContainer.classList.remove('hidden');
+
+    predefinedQuestions.forEach(q => {
+      if (!q) return;
+      const chip        = document.createElement('div');
+      chip.className    = 'saicf-predefined-question';
+      chip.textContent  = q;
+
+      chip.addEventListener('click', () => {
+        chatInput.value = q;
+        sendMessage();
+      });
+
+      predefinedContainer.appendChild(chip);
+    });
+  }
 
   let sessionId = generateSessionId();
   let widgetOpenedOnce = false;
