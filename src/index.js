@@ -68,6 +68,7 @@ async function initializeChatWidget() {
   if (container.parentElement !== document.body) document.body.appendChild(container);
   container.style.position = 'relative';
   container.style.zIndex  = '2147483647';
+  container.style.all = 'initial';
 
   const botId = container.getAttribute('data-user-id');
   if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
@@ -97,6 +98,18 @@ async function initializeChatWidget() {
     /**********************************************************
      * Embedded widget.css (now isolated to this Shadow DOM)
      **********************************************************/
+
+    /* ───────── FULL ISOLATION: kill any inherited styles ───────── */
+    :host {
+      all: initial;            /* reset everything, no !important            */
+      box-sizing: border-box;  /* restore modern box model                   */
+      font-family: "DM Sans", sans-serif;   /* set your base font again      */
+    }
+    /* keep border‑box for everything inside */
+    :host *, :host *::before, :host *::after {
+      box-sizing: inherit;
+    }
+
     :host, .saicf-chat-window, .saicf-chat-window * {
       font-family: "DM Sans", sans-serif !important;
     }
