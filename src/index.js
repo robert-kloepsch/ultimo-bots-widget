@@ -141,8 +141,8 @@ async function initializeChatWidget() {
       position: fixed;
       bottom: 12px;
       right: 12px;
-      width: 400px;
-      height: 550px;
+      width: 430px;
+      height: 620px;
       background-color: transparent;
       border: none;
       border-radius: 16px;
@@ -283,11 +283,11 @@ async function initializeChatWidget() {
     }
     .widget-user-message > :first-child,
     .widget-bot-message > :first-child {
-      margin: 0;
+      margin-top: 0;
     }
     .widget-user-message > :last-child,
     .widget-bot-message > :last-child {
-      margin: 0;
+      margin-bottom: 0;
     }
     .saicf-widget-send-icon {
       font-size: 18px;
@@ -698,12 +698,16 @@ async function initializeChatWidget() {
   welcomeMessages.forEach(msg => {
     const msgEl = document.createElement('div');
     msgEl.className = 'saicf-pop-up-message';
-    msgEl.textContent = msg;
+    msgEl.innerHTML = msg.replace(/\n/g, '<br>');
     popUpContainer.appendChild(msgEl);
 
     // ✅ Click opens chat exactly like the widget icon
     msgEl.addEventListener('click', () => {
-      ensureMarked();
+      ensureMarked().then(() => {
+        if (chatBody.childElementCount === 0) {
+          welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+        }
+      });
       chatWindow.classList.remove('hidden');
       forceReflow(chatWindow);
       chatWindow.classList.add('show');
@@ -711,12 +715,6 @@ async function initializeChatWidget() {
 
       if (window.matchMedia('(max-width: 768px)').matches) {
         document.body.classList.add('no-scroll');
-      }
-
-      if (chatBody.childElementCount === 0) {
-        welcomeMessages.forEach(msg => {
-          appendMessage(msg, 'bot');
-        });
       }
 
       widgetOpenedOnce = true;
@@ -796,18 +794,17 @@ async function initializeChatWidget() {
   let widgetOpenedOnce = false;
 
   chatWidgetIcon.addEventListener('click', () => {
-    ensureMarked();
+    ensureMarked().then(() => {
+      if (chatBody.childElementCount === 0) {
+        welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+      }
+    });
     chatWindow.classList.remove('hidden');
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
     chatOverlay.classList.remove('hidden');
     if (window.matchMedia('(max-width: 768px)').matches) {
       document.body.classList.add('no-scroll');
-    }
-    if (chatBody.childElementCount === 0) {
-      welcomeMessages.forEach(msg => {
-        appendMessage(msg, 'bot');
-      });
     }
     widgetOpenedOnce = true;
     hidePopUp();
