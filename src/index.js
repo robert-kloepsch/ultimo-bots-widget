@@ -890,84 +890,65 @@ async function initializeChatWidget() {
 
   async function sendMessage() {
     const message = chatInput.value.trim();
-    if (!message) return;
+    if (!message) return;               // one‑shot, no “loading” guard needed
 
+    // show the user’s message
     appendMessage(message, 'user');
     chatInput.value = '';
     setLoading(true);
 
     let currentBotMessage = '';
-    const maxRetries = 3;
-    let retryCount = 0;
 
-    const attemptConnection = () => {
-      return new Promise((resolve, reject) => {
-        const url = `https://portal.ultimo-bots.com/api/chatbot_response?user_input=${encodeURIComponent(message)}&session_id=${sessionId}&bot_id=${botId}&language=english`;
-        const eventSource = new EventSource(url);
+    const url =
+      `https://portal.ultimo-bots.com/api/chatbot_response?` +
+      `user_input=${encodeURIComponent(message)}` +
+      `&session_id=${sessionId}&bot_id=${botId}&language=english`;
 
-        let isFirstMessage = true;
-        let timeoutId;
-
-        eventSource.onmessage = (event) => {
-          const chunk = event.data;
-          if (chunk !== 'end of response') {
-            if (isFirstMessage) {
-              setLoading(false);
-              isFirstMessage = false;
-              clearTimeout(timeoutId);
-            }
-            const parsedChunk = chunk.replace(/<newline>/g, '\n');
-            currentBotMessage += parsedChunk;
-            updateBotMessage(currentBotMessage);
-            scrollToBottom();
-          }
-        };
-
-        eventSource.onerror = (error) => {
-          if (isFirstMessage) {
-            reject(new Error('Failed to get response from server.'));
-          }
-          eventSource.close();
-        };
-
-        eventSource.addEventListener('end', () => {
-          updateBotMessage(currentBotMessage);
-          eventSource.close();
-          setLoading(false);
-          scrollToBottom();
-          resolve();
-        });
-
-        timeoutId = setTimeout(() => {
-          if (isFirstMessage) {
-            eventSource.close();
-            reject(new Error('No response received from server.'));
-          }
-        }, 20000);
-      });
-    };
-
-    const retryConnection = async () => {
-      while (retryCount < maxRetries) {
-        try {
-          await attemptConnection();
-          return;
-        } catch (error) {
-          retryCount++;
-          if (retryCount >= maxRetries) {
-            setLoading(false);
-            appendMessage(`Failed to get response after ${maxRetries} attempts.`, 'bot');
-            throw error;
-          }
-        }
-      }
-    };
-
-    try {
-      await retryConnection();
-    } catch (error) {
+    // helper to close the stream and finish up
+    const finish = () => {
       setLoading(false);
-    }
+      scrollToBottom();
+    };
+
+    return new Promise((resolve) => {
+      const es = new EventSource(url);
+      let firstChunk = true;
+
+      // ── streamed content chunks ──────────────────────────
+      es.onmessage = ({ data: chunk }) => {
+        if (chunk === 'end of response') return;     // sentinel
+
+        if (firstChunk) {
+          setLoading(false);
+          firstChunk = false;
+        }
+
+        currentBotMessage += chunk.replace(/<newline>/g, '\n');
+        updateBotMessage(currentBotMessage);
+        scrollToBottom();
+      };
+
+      // ── explicit “end” event from backend ───────────────
+      es.addEventListener('end', () => {
+        updateBotMessage(currentBotMessage);
+        es.close();
+        finish();
+        resolve();
+      });
+
+      // ── server‑side timeout event ───────────────────────
+      es.addEventListener('error', (e) => {
+        if (e?.data === 'Timeout while generating response') {
+          es.close();
+          appendMessage(
+            'Sorry, the server took too long to respond. Please try again.',
+            'bot'
+          );
+          finish();
+          resolve();
+        }
+      });
+    });
   }
 
   function updateBotMessage(text) {
