@@ -47,7 +47,6 @@ async function initializeChatWidget() {
       }
     });
   /*******************************************************************/
-
   let markedReady = typeof marked !== 'undefined';
 
   async function ensureMarked() {
@@ -562,8 +561,10 @@ async function initializeChatWidget() {
 
   let widgetConfig;
   try {
+    const hostPageUrl = encodeURIComponent(window.location.href);
+
     const res = await fetch(
-      `https://portal.ultimo-bots.com/api/widget_configuration/${botId}`,
+      `https://portal.ultimo-bots.com/api/widget_configuration/${botId}?host_url=${hostPageUrl}`,
       { cache: 'no-store' }
     );
 
