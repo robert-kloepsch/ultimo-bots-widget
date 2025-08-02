@@ -414,7 +414,7 @@ async function initializeChatWidget() {
     }
 
     .saicf-pop-up-container.elevated {
-      bottom: calc(65px + var(--widget-size));   /* 55 px (icon) + 10 px gap */
+      bottom: calc(80px + var(--widget-size));   /* 55 px (icon) + 10 px gap */
     }
 
     .saicf-pop-up-message {
