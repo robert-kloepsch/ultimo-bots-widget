@@ -337,7 +337,7 @@ async function initializeChatWidget() {
       right: auto !important;
     }
     .saicf-chat-widget-icon.elevated {
-      bottom: 55px !important;
+      bottom: 70px !important;
     }
     .saicf-chat-window.align-left {
       left: 20px !important;
