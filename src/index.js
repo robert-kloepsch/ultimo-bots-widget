@@ -37,28 +37,6 @@
   }
 })();
 
-function getPageScale() {
-  // Modern browsers
-  if (window.visualViewport) return window.visualViewport.scale || 1;
-
-  // Fallback (screen.width is constant, innerWidth changes with scale)
-  return screen.width / window.innerWidth || 1;
-}
-
-function applyScale(host, hAlign = 'right', vAlign = 'bottom') {
-  const scale = getPageScale();
-  if (scale === 1) {
-    host.style.transform = '';
-    return;
-  }
-
-  // keep the widget anchored where you expect it
-  const originX = hAlign === 'left'  ? 'left'  : 'right';
-  const originY = vAlign === 'elevated' ? 'bottom' : 'bottom'; // same for now
-  host.style.transform       = `scale(${1 / scale})`;
-  host.style.transformOrigin = `${originY} ${originX}`;
-}
-
 async function initializeChatWidget() {
   /************  SEO / PERFORMANCE ADD-ON ① : pre-connect  ***********/
   ['https://portal.ultimo-bots.com', 'https://cdn.jsdelivr.net']
@@ -624,18 +602,6 @@ async function initializeChatWidget() {
 
   const horizontalAlignment = widgetConfig.widget_horizontal_alignment || 'right';
   const verticalAlignment   = widgetConfig.widget_vertical_alignment   || 'bottom';
-
-  // ───────── SCALE-NORMALISATION (now variables are ready) ─────────
-  applyScale(shadowRoot.host, horizontalAlignment, verticalAlignment);
-
-  window.visualViewport?.addEventListener(
-    'resize',
-    () => applyScale(shadowRoot.host, horizontalAlignment, verticalAlignment)
-  );
-  window.addEventListener('orientationchange',
-    () => setTimeout(() =>
-      applyScale(shadowRoot.host, horizontalAlignment, verticalAlignment), 100));
-  // ─────────────────────────────────────────────────────────────────
 
   const chatWidgetIcon = document.createElement('div');
   chatWidgetIcon.className = 'saicf-chat-widget-icon';
