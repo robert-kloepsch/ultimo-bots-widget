@@ -37,42 +37,6 @@
   }
 })();
 
-function getPageScale() {
-  // --- 1: Look at the viewport meta tag -------------------------
-  const meta = document.querySelector('meta[name="viewport"][content*="width="]');
-  if (meta) {
-    const m = meta.content.match(/width\s*=\s*(device-width|\d+)/i);
-    if (m && m[1] && m[1].toLowerCase() !== 'device-width') {
-      const fixedWidth = parseFloat(m[1]);
-      if (fixedWidth > 0) {
-        return screen.width / fixedWidth;
-      }
-    }
-  }
-
-  // --- 2: visualViewport (most reliable after Chrome 67 / iOS 13) ---
-  if (window.visualViewport && window.visualViewport.scale) {
-    return window.visualViewport.scale;
-  }
-
-  // --- 3: Legacy fall-back ----------------------------------------
-  return screen.width / document.documentElement.clientWidth || 1;
-}
-
-function applyScale(host, hAlign = 'right', vAlign = 'bottom') {
-  const scale = getPageScale();
-  if (scale === 1) {
-    host.style.transform = '';
-    return;
-  }
-
-  // keep the widget anchored where you expect it
-  const originX = hAlign === 'left'  ? 'left'  : 'right';
-  const originY = vAlign === 'elevated' ? 'bottom' : 'bottom'; // same for now
-  host.style.transform       = `scale(${1 / scale})`;
-  host.style.transformOrigin = `${originY} ${originX}`;
-}
-
 async function initializeChatWidget() {
   /************  SEO / PERFORMANCE ADD-ON ① : pre-connect  ***********/
   ['https://portal.ultimo-bots.com', 'https://cdn.jsdelivr.net']
@@ -639,18 +603,6 @@ async function initializeChatWidget() {
   const horizontalAlignment = widgetConfig.widget_horizontal_alignment || 'right';
   const verticalAlignment   = widgetConfig.widget_vertical_alignment   || 'bottom';
 
-  // ───────── SCALE-NORMALISATION (now variables are ready) ─────────
-  applyScale(shadowRoot.host, horizontalAlignment, verticalAlignment);
-
-  window.visualViewport?.addEventListener(
-    'resize',
-    () => applyScale(shadowRoot.host, horizontalAlignment, verticalAlignment)
-  );
-  window.addEventListener('orientationchange',
-    () => setTimeout(() =>
-      applyScale(shadowRoot.host, horizontalAlignment, verticalAlignment), 100));
-  // ─────────────────────────────────────────────────────────────────
-
   const chatWidgetIcon = document.createElement('div');
   chatWidgetIcon.className = 'saicf-chat-widget-icon';
   if (isPulsing) {
@@ -737,6 +689,31 @@ async function initializeChatWidget() {
   `;
 
   const popUpContainer = document.createElement('div');
+
+  (function zoomWidgetForWixMobile () {
+    /* run only on narrow screens – skip desktop completely */
+    if (window.screen.width > 600) return;          // ← use screen.width here
+
+    const vp = document.querySelector('meta[name="viewport"][id="wixMobileViewport"]');
+    if (!vp) return;
+
+    const m = /width\s*=\s*(\d+)/i.exec(vp.content || '');
+    if (!m) return;
+
+    const forcedWidth = +m[1];                      // 320
+
+    const physical    = window.screen.width;        // ← real CSS-px of device
+    if (physical <= forcedWidth) return;            // e.g. old iPhone SE
+
+    const zoomFactor  = forcedWidth / physical;     // ≈ 0.74 on 375-px devices
+    console.log(zoomFactor)
+
+    /* zoom rescales visuals *and* hit-testing */
+    container.style.zoom = zoomFactor;              // all major browsers
+    container.style.setProperty('-moz-transform', `scale(${zoomFactor})`);
+    container.style.setProperty('-moz-transform-origin', 'top left');
+  })();
+
   popUpContainer.className = 'saicf-pop-up-container hidden';
 
   const popUpCloseBtn = document.createElement('button');
