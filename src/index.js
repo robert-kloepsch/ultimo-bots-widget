@@ -472,6 +472,7 @@ async function initializeChatWidget() {
       gap:8px;
       padding:6px 10px;
       padding-bottom: 0;
+      background: white;
     }
 
     .saicf-predefined-container::-webkit-scrollbar{display:none;}
