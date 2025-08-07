@@ -72,6 +72,16 @@ async function initializeChatWidget() {
   const botId = container.getAttribute('data-user-id');
   if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
 
+  const POPUP_KEY = `saicf-popup-seen-${botId}`;
+  let   popUpSeen = sessionStorage.getItem(POPUP_KEY) === '1';
+
+  function markPopUpSeen() {
+    if (!popUpSeen) {
+      popUpSeen = true;
+      sessionStorage.setItem(POPUP_KEY, '1');
+    }
+  }
+
   const shadowRoot = container.attachShadow({ mode: 'open' });
   shadowRoot.host.setAttribute('lang', 'en');
 
@@ -758,6 +768,7 @@ async function initializeChatWidget() {
       }
 
       widgetOpenedOnce = true;
+      markPopUpSeen();
       hidePopUp();
     });
   });
@@ -831,7 +842,7 @@ async function initializeChatWidget() {
   }
 
   let sessionId = generateSessionId();
-  let widgetOpenedOnce = false;
+  let widgetOpenedOnce = popUpSeen;
 
   chatWidgetIcon.addEventListener('click', () => {
     ensureMarked().then(() => {
@@ -847,6 +858,7 @@ async function initializeChatWidget() {
       document.body.classList.add('no-scroll');
     }
     widgetOpenedOnce = true;
+    markPopUpSeen();
     hidePopUp();
   });
 
@@ -868,10 +880,11 @@ async function initializeChatWidget() {
     e.stopPropagation();
     hidePopUp();
     widgetOpenedOnce = true;
+    markPopUpSeen();
   });
 
   function showPopUpSequentially() {
-    if (widgetOpenedOnce) return;
+    if (widgetOpenedOnce || popUpSeen) return;
     popUpContainer.classList.remove('hidden');
 
     const msgs = popUpContainer.querySelectorAll('.saicf-pop-up-message');
