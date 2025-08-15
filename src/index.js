@@ -504,6 +504,20 @@ async function initializeChatWidget() {
       transform:translateY(-1px);
     }
 
+    /* ——— busy/disabled visuals ——— */
+    .saicf-send-message[disabled] {
+      opacity: .5 !important;
+      cursor: not-allowed !important;
+    }
+    .saicf-chat-footer input:disabled {
+      background: #f5f5f5 !important;
+      cursor: not-allowed !important;
+    }
+    .saicf-predefined-question.is-disabled {
+      opacity: .5 !important;
+      pointer-events: none !important;
+    }
+
     @media (max-width: 768px) {
       .saicf-chat-overlay {
         position: fixed;
@@ -808,6 +822,29 @@ async function initializeChatWidget() {
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer input');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
 
+  let isBusy = false; // ← blocks any new user input while bot is responding
+
+  function getPredefinedChips() {
+    return Array.from(chatWindow.querySelectorAll('.saicf-predefined-question'));
+  }
+
+  function setBusy(b) {
+    isBusy = b;
+
+    // Inputs
+    chatInput.disabled = b;
+    sendMessageBtn.disabled = b;
+    chatInput.setAttribute('aria-disabled', String(b));
+    sendMessageBtn.setAttribute('aria-disabled', String(b));
+
+    // Predefined question chips
+    getPredefinedChips().forEach(chip => {
+      chip.classList.toggle('is-disabled', b);
+      chip.tabIndex = b ? -1 : 0;
+      chip.setAttribute('aria-disabled', String(b));
+    });
+  }
+
   /* ───────── predefined‑question chips ───────── */
   const predefinedContainer = chatWindow.querySelector('.saicf-predefined-container');
 
@@ -833,6 +870,7 @@ async function initializeChatWidget() {
       chip.textContent  = q;
 
       chip.addEventListener('click', () => {
+        if (isBusy) return;          // ignore while streaming
         chatInput.value = q;
         sendMessage();
       });
@@ -867,11 +905,13 @@ async function initializeChatWidget() {
   });
 
   sendMessageBtn.addEventListener('click', () => {
+    if (isBusy) return;
     sendMessage();
   });
 
   chatInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
+      if (isBusy) { e.preventDefault(); return; }
       sendMessage();
     }
   });
@@ -929,12 +969,16 @@ async function initializeChatWidget() {
   }
 
   async function sendMessage() {
+    if (isBusy) return;                // ← guard against re-entry
+
     const message = chatInput.value.trim();
-    if (!message) return;               // one‑shot, no “loading” guard needed
+    if (!message) return;
 
     // show the user’s message
     appendMessage(message, 'user');
     chatInput.value = '';
+
+    setBusy(true);
     setLoading(true);
 
     let currentBotMessage = '';
@@ -944,9 +988,9 @@ async function initializeChatWidget() {
       `user_input=${encodeURIComponent(message)}` +
       `&session_id=${sessionId}&bot_id=${botId}&language=english`;
 
-    // helper to close the stream and finish up
     const finish = () => {
       setLoading(false);
+      setBusy(false);                  // ← re-enable everything only now
       scrollToBottom();
     };
 
@@ -954,21 +998,17 @@ async function initializeChatWidget() {
       const es = new EventSource(url);
       let firstChunk = true;
 
-      // ── streamed content chunks ──────────────────────────
       es.onmessage = ({ data: chunk }) => {
-        if (chunk === 'end of response') return;     // sentinel
-
+        if (chunk === 'end of response') return;
         if (firstChunk) {
           setLoading(false);
           firstChunk = false;
         }
-
         currentBotMessage += chunk.replace(/<newline>/g, '\n');
         updateBotMessage(currentBotMessage);
         scrollToBottom();
       };
 
-      // ── explicit “end” event from backend ───────────────
       es.addEventListener('end', () => {
         updateBotMessage(currentBotMessage);
         es.close();
@@ -976,7 +1016,6 @@ async function initializeChatWidget() {
         resolve();
       });
 
-      // ── server‑side timeout event ───────────────────────
       es.addEventListener('error', (e) => {
         if (e?.data === 'Timeout while generating response') {
           es.close();
