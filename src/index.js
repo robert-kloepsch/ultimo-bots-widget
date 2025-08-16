@@ -599,8 +599,44 @@ async function initializeChatWidget() {
     widgetConfig = await res.json();
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
+
+    const backlink = document.createElement('div');
+    backlink.style.position = 'fixed';
+    backlink.style.bottom = '4px';
+    backlink.style.left = '50%';
+    backlink.style.transform = 'translateX(-50%)';
+    backlink.style.fontSize = '10px';
+    backlink.style.opacity = '0.3';
+    backlink.style.zIndex = '10';
+    backlink.innerHTML = `
+      <a 
+        href="https://www.ultimo-bots.com" 
+        target="_blank" 
+        rel="noopener"
+        style="color:inherit;text-decoration:none;">
+        This website is powered by smart AI chatbots from Ultimo Bots
+      </a>`;
+    document.body.appendChild(backlink);
     return;
   }
+
+  const backlink = document.createElement('div');
+  backlink.style.position = 'fixed';
+  backlink.style.bottom = '4px';
+  backlink.style.left = '50%';
+  backlink.style.transform = 'translateX(-50%)';
+  backlink.style.fontSize = '10px';
+  backlink.style.opacity = '0.3';
+  backlink.style.zIndex = '10';
+  backlink.innerHTML = `
+    <a 
+      href="https://www.ultimo-bots.com" 
+      target="_blank" 
+      rel="noopener"
+      style="color:inherit;text-decoration:none;">
+      This website is powered by smart AI chatbots from Ultimo Bots
+    </a>`;
+  document.body.appendChild(backlink);
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
