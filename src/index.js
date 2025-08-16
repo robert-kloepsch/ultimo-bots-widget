@@ -606,7 +606,7 @@ async function initializeChatWidget() {
     backlink.style.left = '50%';
     backlink.style.transform = 'translateX(-50%)';
     backlink.style.fontSize = '10px';
-    backlink.style.opacity = '0.3';
+    backlink.style.opacity = '0.01';
     backlink.style.zIndex = '10';
     backlink.innerHTML = `
       <a 
@@ -626,7 +626,7 @@ async function initializeChatWidget() {
   backlink.style.left = '50%';
   backlink.style.transform = 'translateX(-50%)';
   backlink.style.fontSize = '10px';
-  backlink.style.opacity = '0.3';
+  backlink.style.opacity = '0.01';
   backlink.style.zIndex = '10';
   backlink.innerHTML = `
     <a 
