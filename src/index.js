@@ -600,24 +600,32 @@ async function initializeChatWidget() {
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
 
+    // make sure body is the positioning context
+    document.body.style.position = 'relative';
+
     const backlink = document.createElement('a');
     backlink.href = 'https://www.ultimo-bots.com';
     backlink.target = '_blank';
     backlink.rel = 'noopener';
-    backlink.textContent =
-      'This website is powered by smart AI chatbots from Ultimo Bots';
+    backlink.textContent = 'This website is powered by smart AI chatbots from Ultimo Bots';
 
-    backlink.style.display = 'block';      // so it sits on its own line
-    backlink.style.textAlign = 'center';   // centered horizontally
-    backlink.style.fontSize = '8px';
-    backlink.style.opacity = '0.01';
+    backlink.style.position    = 'absolute';
+    backlink.style.bottom      = '0';
+    backlink.style.left        = '50%';
+    backlink.style.transform   = 'translateX(-50%)';
+    backlink.style.fontSize    = '8px';
+    backlink.style.opacity     = '0.01';
+    backlink.style.textAlign   = 'center';
     backlink.style.textDecoration = 'none';
-    backlink.style.color = 'inherit';      // inherit page text color
+    backlink.style.color       = 'inherit';
 
     document.body.appendChild(backlink);
 
     return;
   }
+
+  // make sure body is the positioning context
+  document.body.style.position = 'relative';
 
   const backlink = document.createElement('a');
   backlink.href = 'https://www.ultimo-bots.com';
@@ -626,14 +634,18 @@ async function initializeChatWidget() {
   backlink.textContent =
     'This website is powered by smart AI chatbots from Ultimo Bots';
 
-  backlink.style.display = 'block';      // so it sits on its own line
-  backlink.style.textAlign = 'center';   // centered horizontally
-  backlink.style.fontSize = '8px';
-  backlink.style.opacity = '0.3';
+  backlink.style.position    = 'absolute';
+  backlink.style.bottom      = '0';
+  backlink.style.left        = '50%';
+  backlink.style.transform   = 'translateX(-50%)';
+  backlink.style.fontSize    = '8px';
+  backlink.style.opacity     = '0.3';
+  backlink.style.textAlign   = 'center';
   backlink.style.textDecoration = 'none';
-  backlink.style.color = 'inherit';      // inherit page text color
+  backlink.style.color       = 'inherit';
 
   document.body.appendChild(backlink);
+
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
