@@ -601,13 +601,11 @@ async function initializeChatWidget() {
     console.error('Widget config load failed – widget aborted', err);
 
     const backlink = document.createElement('div');
-    backlink.style.position = 'fixed';
-    backlink.style.bottom = '4px';
-    backlink.style.left = '50%';
-    backlink.style.transform = 'translateX(-50%)';
-    backlink.style.fontSize = '10px';
+    backlink.style.fontSize = '8px';
     backlink.style.opacity = '0.01';
-    backlink.style.zIndex = '10';
+    backlink.style.textAlign = 'center';
+    backlink.style.marginTop = '10px';
+
     backlink.innerHTML = `
       <a 
         href="https://www.ultimo-bots.com" 
@@ -616,18 +614,17 @@ async function initializeChatWidget() {
         style="color:inherit;text-decoration:none;">
         This website is powered by smart AI chatbots from Ultimo Bots
       </a>`;
+
     document.body.appendChild(backlink);
     return;
   }
 
   const backlink = document.createElement('div');
-  backlink.style.position = 'fixed';
-  backlink.style.bottom = '4px';
-  backlink.style.left = '50%';
-  backlink.style.transform = 'translateX(-50%)';
-  backlink.style.fontSize = '10px';
-  backlink.style.opacity = '0.01';
-  backlink.style.zIndex = '10';
+  backlink.style.fontSize = '8px';
+  backlink.style.opacity = '0.3';
+  backlink.style.textAlign = 'center';
+  backlink.style.marginTop = '10px';
+
   backlink.innerHTML = `
     <a 
       href="https://www.ultimo-bots.com" 
@@ -636,6 +633,7 @@ async function initializeChatWidget() {
       style="color:inherit;text-decoration:none;">
       This website is powered by smart AI chatbots from Ultimo Bots
     </a>`;
+
   document.body.appendChild(backlink);
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
