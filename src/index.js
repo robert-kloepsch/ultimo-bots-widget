@@ -609,7 +609,7 @@ async function initializeChatWidget() {
 
     backlink.style.display = 'block';      // so it sits on its own line
     backlink.style.textAlign = 'center';   // centered horizontally
-    backlink.style.fontSize = '10px';
+    backlink.style.fontSize = '8px';
     backlink.style.opacity = '0.01';
     backlink.style.textDecoration = 'none';
     backlink.style.color = 'inherit';      // inherit page text color
@@ -628,7 +628,7 @@ async function initializeChatWidget() {
 
   backlink.style.display = 'block';      // so it sits on its own line
   backlink.style.textAlign = 'center';   // centered horizontally
-  backlink.style.fontSize = '10px';
+  backlink.style.fontSize = '8px';
   backlink.style.opacity = '0.3';
   backlink.style.textDecoration = 'none';
   backlink.style.color = 'inherit';      // inherit page text color
