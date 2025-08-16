@@ -600,39 +600,38 @@ async function initializeChatWidget() {
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
 
-    const backlink = document.createElement('div');
-    backlink.style.fontSize = '8px';
-    backlink.style.opacity = '0.01';
-    backlink.style.textAlign = 'center';
-    backlink.style.marginTop = '10px';
+    const backlink = document.createElement('a');
+    backlink.href = 'https://www.ultimo-bots.com';
+    backlink.target = '_blank';
+    backlink.rel = 'noopener';
+    backlink.textContent =
+      'This website is powered by smart AI chatbots from Ultimo Bots';
 
-    backlink.innerHTML = `
-      <a 
-        href="https://www.ultimo-bots.com" 
-        target="_blank" 
-        rel="noopener"
-        style="color:inherit;text-decoration:none;">
-        This website is powered by smart AI chatbots from Ultimo Bots
-      </a>`;
+    backlink.style.display = 'block';      // so it sits on its own line
+    backlink.style.textAlign = 'center';   // centered horizontally
+    backlink.style.fontSize = '10px';
+    backlink.style.opacity = '0.01';
+    backlink.style.textDecoration = 'none';
+    backlink.style.color = 'inherit';      // inherit page text color
 
     document.body.appendChild(backlink);
+
     return;
   }
 
-  const backlink = document.createElement('div');
-  backlink.style.fontSize = '8px';
-  backlink.style.opacity = '0.3';
-  backlink.style.textAlign = 'center';
-  backlink.style.marginTop = '10px';
+  const backlink = document.createElement('a');
+  backlink.href = 'https://www.ultimo-bots.com';
+  backlink.target = '_blank';
+  backlink.rel = 'noopener';
+  backlink.textContent =
+    'This website is powered by smart AI chatbots from Ultimo Bots';
 
-  backlink.innerHTML = `
-    <a 
-      href="https://www.ultimo-bots.com" 
-      target="_blank" 
-      rel="noopener"
-      style="color:inherit;text-decoration:none;">
-      This website is powered by smart AI chatbots from Ultimo Bots
-    </a>`;
+  backlink.style.display = 'block';      // so it sits on its own line
+  backlink.style.textAlign = 'center';   // centered horizontally
+  backlink.style.fontSize = '10px';
+  backlink.style.opacity = '0.3';
+  backlink.style.textDecoration = 'none';
+  backlink.style.color = 'inherit';      // inherit page text color
 
   document.body.appendChild(backlink);
 
