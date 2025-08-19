@@ -518,6 +518,14 @@ async function initializeChatWidget() {
       pointer-events: none !important;
     }
 
+    @media (min-width: 769px) {
+      .saicf-chat-window {
+        width: min(430px, calc(100svw - 24px));
+        height: min(620px, calc(100svh - 24px));
+        max-height: calc(100svh - 24px);
+      }
+    }
+
     @media (max-width: 768px) {
       .saicf-chat-overlay {
         position: fixed;
