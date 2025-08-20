@@ -65,9 +65,17 @@ async function initializeChatWidget() {
   if (!container) { console.error('Chat widget container not found'); return; }
 
   if (container.parentElement !== document.body) document.body.appendChild(container);
-  container.style.position = 'relative';
-  container.style.zIndex  = '2147483647';
+  // container.style.position = 'relative';
+  // container.style.all = 'initial';
+  // container.style.zIndex = '2147483647';
   container.style.all = 'initial';
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '0';
+  container.style.width = '0';
+  container.style.height = '0';
+  container.style.zIndex = '2147483647';
+  container.style.pointerEvents = 'none';
 
   const botId = container.getAttribute('data-user-id');
   if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
@@ -110,10 +118,19 @@ async function initializeChatWidget() {
 
     /* ───────── FULL ISOLATION: kill any inherited styles ───────── */
     :host {
-      all: initial;            /* reset everything, no !important            */
-      box-sizing: border-box;  /* restore modern box model                   */
-      font-family: "DM Sans", sans-serif;   /* set your base font again      */
+      all: initial;
+      box-sizing: border-box;
+      font-family: "DM Sans", sans-serif;
+      z-index: 2147483647 !important;
+      position: fixed !important;   /* 👈 add this */
+      top: 0; left: 0; width: 0; height: 0;
+      pointer-events: none;
     }
+
+    .saicf-chat-window,
+    .saicf-chat-widget-icon,
+    .saicf-pop-up-container { pointer-events: auto; }
+
     /* keep border‑box for everything inside */
     :host *, :host *::before, :host *::after {
       box-sizing: inherit;
