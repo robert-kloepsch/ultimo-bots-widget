@@ -80,6 +80,10 @@ async function initializeChatWidget() {
   const botId = container.getAttribute('data-user-id');
   if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
 
+  const HIDE_POWERED_BY_IDS = [
+    '175312141824050790019FvXPU',
+  ];
+
   const POPUP_KEY = `saicf-popup-seen-${botId}`;
   let   popUpSeen = sessionStorage.getItem(POPUP_KEY) === '1';
 
@@ -625,6 +629,28 @@ async function initializeChatWidget() {
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
 
+    if (!HIDE_POWERED_BY_IDS.includes(botId)) {
+      const backlink = document.createElement('a');
+      backlink.href = 'https://www.ultimo-bots.com';
+      backlink.target = '_blank';
+      backlink.rel = 'noopener';
+      backlink.textContent =
+        'This website is powered by smart AI chatbots from Ultimo Bot s';
+
+      backlink.style.display = 'block';      // so it sits on its own line
+      backlink.style.textAlign = 'center';   // centered horizontally
+      backlink.style.fontSize = '8px';
+      backlink.style.opacity = '0.01';
+      backlink.style.textDecoration = 'none';
+      backlink.style.color = 'inherit';      // inherit page text color
+
+      document.body.appendChild(backlink);
+    }
+
+    return;
+  }
+
+  if (!HIDE_POWERED_BY_IDS.includes(botId)) {
     const backlink = document.createElement('a');
     backlink.href = 'https://www.ultimo-bots.com';
     backlink.target = '_blank';
@@ -640,25 +666,7 @@ async function initializeChatWidget() {
     backlink.style.color = 'inherit';      // inherit page text color
 
     document.body.appendChild(backlink);
-
-    return;
   }
-
-  const backlink = document.createElement('a');
-  backlink.href = 'https://www.ultimo-bots.com';
-  backlink.target = '_blank';
-  backlink.rel = 'noopener';
-  backlink.textContent =
-    'This website is powered by smart AI chatbots from Ultimo Bots';
-
-  backlink.style.display = 'block';      // so it sits on its own line
-  backlink.style.textAlign = 'center';   // centered horizontally
-  backlink.style.fontSize = '8px';
-  backlink.style.opacity = '0.3';
-  backlink.style.textDecoration = 'none';
-  backlink.style.color = 'inherit';      // inherit page text color
-
-  document.body.appendChild(backlink);
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
@@ -745,21 +753,27 @@ async function initializeChatWidget() {
       </div>
     </div>
   `;
+  // Conditionally include the powered-by HTML
+  const poweredByHTML = HIDE_POWERED_BY_IDS.includes(botId)
+    ? ''
+    : `
+        <div class="saicf-powered-by">
+          <a class="saicf-powered-by-text"
+            href="https://www.ultimo-bots.com"
+            target="_blank"
+            rel="noopener"
+            title="Our website uses intelligent chatbots powered by Ultimo Bots to improve customer service.">
+            Powered by Ultimo Bots
+          </a>
+        </div>
+      `;
+
   chatWindow.innerHTML = `
     ${headerHTML}
     <div class="saicf-chat-body"></div>
     <div class="saicf-chat-footer">
-      <!-- ⇣⇣ new: predefined-question chips ⇣⇣ -->
       <div class="saicf-predefined-container hidden"></div>
-      <div class="saicf-powered-by">
-        <a class="saicf-powered-by-text"
-          href="https://www.ultimo-bots.com"
-          target="_blank"
-          rel="noopener"
-          title="Our website uses intelligent chatbots powered by Ultimo Bots to improve customer service.">
-          Powered by Ultimo Bots
-        </a>
-      </div>
+      ${poweredByHTML}
       <div class="saicf-input-send-container">
         <input type="text" class="saicf-chat-input" placeholder="Type your message...">
         <button class="saicf-send-message" style="background-color:${themeColor};" aria-label="Send message">
