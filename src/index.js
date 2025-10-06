@@ -548,36 +548,54 @@ async function initializeChatWidget() {
     }
 
     @media (max-width: 768px) {
+      /* Hide the dim overlay; the window itself covers the screen */
       .saicf-chat-overlay {
-        position: fixed;
-        background: rgba(0, 0, 0, 0.2);
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 999999;
+        display: none !important;
       }
+
+      /* Fullscreen chat window (slides up when .show is added) */
       .saicf-chat-window {
-        position: fixed;
-        left: 4%;
-        bottom: 1%;
-        width: 92%;
-        height: 87%;
-        border-radius: 16px;
-        transition: opacity 0.6s ease, transform 0.6s ease;
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 0 !important;
+        background: #ffffff !important;
+        opacity: 0 !important;
+        transform: translateY(100%) !important;
+        transition: opacity 0.75s ease, transform 0.75s ease !important;
+        display: flex !important;
+        flex-direction: column !important;
       }
-      body.no-scroll {
-        overflow: hidden;
+
+      /* When opened */
+      .saicf-chat-window.show {
+        opacity: 1 !important;
+        transform: none !important;
       }
+
+      /* Internal pieces tuned for fullscreen */
+      .saicf-chat-window .saicf-chat-header {
+        border-radius: 0 !important;
+      }
+      .saicf-chat-window .saicf-chat-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      .saicf-chat-window .saicf-chat-footer {
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+      }
+
+      /* Keep your existing mobile sizing for other bits */
       .saicf-close-chat-widget-icon {
         font-size: 22px;
       }
       .saicf-chat-title {
         font-size: 16px;
       }
-      .widget-user-message {
-        font-size: 17px;
-      }
+      .widget-user-message,
       .widget-bot-message {
         font-size: 17px;
       }
