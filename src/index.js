@@ -206,8 +206,8 @@ async function initializeChatWidget() {
     }
     .saicf-chat-header {
       color: white;
-      padding: 10px 15px;
-      border-radius: 16px 16px 0px 0px;
+      padding: 15px 8px;
+      border-radius: 0px;
       display: flex;
       flex-direction: column;
     }
@@ -539,6 +539,69 @@ async function initializeChatWidget() {
       pointer-events: none !important;
     }
 
+    /* ───────── Header actions: close "X" + three-dots menu ───────── */
+    .saicf-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative; /* anchor menu below */
+    }
+
+    .saicf-ellipsis-btn {
+      background: none;
+      border: none;
+      color: inherit;
+      padding: 4px;
+      margin: 0;
+      cursor: pointer;
+      line-height: 1;
+      border-radius: 6px;
+      transition: background-color .2s ease, transform .2s ease;
+    }
+    .saicf-ellipsis-btn:hover { transform: scale(1.06); }
+    .saicf-ellipsis-btn svg { width: 1.2em; height: 1.2em; display: block; }
+
+    .saicf-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 160px;
+      background: #fff;
+      color: #1f2937;
+      border: 1px solid rgba(0,0,0,.08);
+      box-shadow: 0 8px 24px rgba(0,0,0,.15);
+      border-radius: 10px;
+      padding: 6px;
+      z-index: 2147483647; /* above header */
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-6px);
+      transition: opacity .15s ease, transform .15s ease;
+    }
+    .saicf-menu.is-open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .saicf-menu-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      color: inherit;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .saicf-menu-item:hover { background: #f3f4f6; }
+
+    .saicf-menu-item svg { width: 1em; height: 1em; display: block; }
+
     @media (min-width: 769px) {
       .saicf-chat-window {
         width: min(430px, calc(100svw - 24px));
@@ -751,7 +814,7 @@ async function initializeChatWidget() {
 
   const logoHTML = logo
     ? `<img src="${logo}" alt="Chat Logo"
-         style="height:24px;width:24px;border-radius:50%;object-fit:cover;"/>`
+         style="height:30px;width:30px;border-radius:50%;object-fit:cover;"/>`
     : '';
   const headerHTML = `
     <div class="saicf-chat-header" style="background-color:${themeColor};">
@@ -760,11 +823,32 @@ async function initializeChatWidget() {
           ${logoHTML}
           <span class="saicf-chat-title" style="color:${headerFontColor};">${widgetHeaderText}</span>
         </div>
-        <button class="saicf-close-btn saicf-close-chat-widget-icon" aria-label="Close chat" style="color:${headerFontColor};">
-          <svg viewBox="0 0 384 512" style="height:1em;width:1em;fill:currentColor;">
-            <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
-          </svg>
-        </button>
+
+        <div class="saicf-header-actions" aria-label="Chat actions">
+          <!-- three dots -->
+          <button class="saicf-ellipsis-btn" aria-label="More actions" title="More">
+            <svg viewBox="0 0 448 512" fill="${headerFontColor}">
+              <path d="M120 256a56 56 0 1 1-112 0 56 56 0 1 1 112 0zm160 0a56 56 0 1 1-112 0 56 56 0 1 1 112 0zm160 0a56 56 0 1 1-112 0 56 56 0 1 1 112 0z"/>
+            </svg>
+          </button>
+
+          <!-- close X (unchanged) -->
+          <button class="saicf-close-btn saicf-close-chat-widget-icon" aria-label="Close chat" style="color:${headerFontColor};">
+            <svg viewBox="0 0 384 512" style="height:1em;width:1em;fill:currentColor;">
+              <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
+            </svg>
+          </button>
+
+          <!-- dropdown menu -->
+          <div class="saicf-menu" role="menu" aria-hidden="true">
+            <button class="saicf-menu-item saicf-menu-item--clear" role="menuitem">
+              <svg viewBox="0 0 448 512" fill="currentColor">
+                <path d="M135.2 17.7c2.9-10.7 12.7-17.7 23.8-17.7h129.9c11.1 0 20.9 7.1 23.8 17.7L328 32H432c8.8 0 16 7.2 16 16s-7.2 16-16 16H416 32 16C7.2 64 0 56.8 0 48S7.2 32 16 32H120l15.2-14.3zM64 96H384l-21.2 355.9c-1.5 25.1-22.3 44.1-47.4 44.1H132.6c-25.1 0-45.9-19-47.4-44.1L64 96z"/>
+              </svg>
+              Clear chat
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -908,6 +992,68 @@ async function initializeChatWidget() {
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer input');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
+
+  // ───────── three-dots menu wiring ─────────
+  const ellipsisBtn = chatWindow.querySelector('.saicf-ellipsis-btn');
+  const actionsWrap = chatWindow.querySelector('.saicf-header-actions');
+  const menu        = chatWindow.querySelector('.saicf-menu');
+  const clearBtn    = chatWindow.querySelector('.saicf-menu-item--clear');
+
+  // toggle menu open/close
+  function toggleMenu(open) {
+    const willOpen = typeof open === 'boolean' ? open : !menu.classList.contains('is-open');
+    menu.classList.toggle('is-open', willOpen);
+    menu.setAttribute('aria-hidden', String(!willOpen));
+  }
+
+  // close menu on outside click (inside shadow DOM)
+  shadowRoot.addEventListener('click', (e) => {
+    if (!menu.classList.contains('is-open')) return;
+    if (actionsWrap.contains(e.target)) return; // clicks on button/menu are fine
+    toggleMenu(false);
+  });
+
+  // also close on Escape
+  shadowRoot.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && menu.classList.contains('is-open')) toggleMenu(false);
+  });
+
+  // open/close when tapping the dots
+  ellipsisBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+
+  // clear chat = new session + wipe messages (+ show welcome again)
+  clearBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    toggleMenu(false);
+
+    // new session id
+    sessionId = generateSessionId();
+
+    // clear UI messages
+    chatBody.innerHTML = '';
+
+    // optional: also remove any "loading dots" if present
+    const loadingDots = chatBody.querySelector('.saicf-loading-dots');
+    if (loadingDots) loadingDots.remove();
+
+    // re-show welcome messages (if configured)
+    if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
+      welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+    }
+
+    // focus input for convenience
+    chatInput.focus();
+  });
+
+  // make sure menu never lingers when the chat closes
+  const _origCloseChat = closeChat;
+  closeChat = function () {
+    toggleMenu(false);
+    _origCloseChat();
+  };
 
   let isBusy = false; // ← blocks any new user input while bot is responding
 
