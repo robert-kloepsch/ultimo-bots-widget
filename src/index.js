@@ -206,8 +206,8 @@ async function initializeChatWidget() {
     }
     .saicf-chat-header {
       color: white;
-      padding: 15px 8px;
-      border-radius: 0px;
+      padding: 10px 15px;
+      border-radius: 16px 16px 0px 0px;
       display: flex;
       flex-direction: column;
     }
@@ -543,7 +543,7 @@ async function initializeChatWidget() {
     .saicf-header-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       position: relative; /* anchor menu below */
     }
 
@@ -554,11 +554,11 @@ async function initializeChatWidget() {
       padding: 4px;
       margin: 0;
       cursor: pointer;
-      line-height: 1;
       border-radius: 6px;
       transition: background-color .2s ease, transform .2s ease;
+      font-size: 20px;
     }
-    .saicf-ellipsis-btn:hover { transform: scale(1.06); }
+    .saicf-ellipsis-btn:hover { transform: scale(1.08); }
     .saicf-ellipsis-btn svg { width: 1.2em; height: 1.2em; display: block; }
 
     .saicf-menu {
@@ -640,6 +640,10 @@ async function initializeChatWidget() {
       /* Internal pieces tuned for fullscreen */
       .saicf-chat-window .saicf-chat-header {
         border-radius: 0 !important;
+      }
+
+      .saicf-chat-header {
+        padding: 15px 8px;
       }
       .saicf-chat-window .saicf-chat-body {
         flex: 1 1 auto !important;
