@@ -65,6 +65,9 @@ async function initializeChatWidget() {
   if (!container) { console.error('Chat widget container not found'); return; }
 
   if (container.parentElement !== document.body) document.body.appendChild(container);
+  // container.style.position = 'relative';
+  // container.style.all = 'initial';
+  // container.style.zIndex = '2147483647';
   container.style.all = 'initial';
   container.style.position = 'fixed';
   container.style.top = '0';
@@ -102,9 +105,7 @@ async function initializeChatWidget() {
       html.no-scroll {
         overflow: hidden !important;
         position: fixed !important;
-        left: 0 !important;
-        right: 0 !important;
-        /* no top/bottom here so JS can control top */
+        inset: 0 !important;
         width: 100% !important;
         touch-action: none !important;
         overscroll-behavior: none !important;
@@ -848,7 +849,9 @@ async function initializeChatWidget() {
       chatWindow.classList.add('show');
       chatOverlay.classList.remove('hidden');
 
-      lockScroll();
+      if (window.matchMedia('(max-width: 768px)').matches) {
+        document.body.classList.add('no-scroll');
+      }
 
       widgetOpenedOnce = true;
       markPopUpSeen();
@@ -961,7 +964,9 @@ async function initializeChatWidget() {
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
     chatOverlay.classList.remove('hidden');
-    lockScroll();
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      document.body.classList.add('no-scroll');
+    }
     widgetOpenedOnce = true;
     markPopUpSeen();
     hidePopUp();
@@ -1020,48 +1025,12 @@ async function initializeChatWidget() {
     void element.offsetHeight;
   }
 
-  // --- scroll lock helpers (mobile) ---
-  let __savedScrollY = 0;
-  let __scrollLocked = false;
-  let __prevScrollBehavior = '';
-
-  function lockScroll() {
-    if (__scrollLocked || !window.matchMedia('(max-width: 768px)').matches) return;
-
-    __savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    __prevScrollBehavior = document.documentElement.style.scrollBehavior || '';
-    document.documentElement.style.scrollBehavior = 'auto'; // instant restore
-
-    // add class to both roots so whichever scrolls gets fixed
-    document.body.classList.add('no-scroll');
-    document.documentElement.classList.add('no-scroll');
-
-    // offset both (safe across sites where html vs body is the scroller)
-    document.body.style.top = `-${__savedScrollY}px`;
-    document.documentElement.style.top = `-${__savedScrollY}px`;
-
-    __scrollLocked = true;
-  }
-
-  function unlockScroll() {
-    if (!__scrollLocked) return;
-
-    document.body.classList.remove('no-scroll');
-    document.documentElement.classList.remove('no-scroll');
-
-    document.body.style.top = '';
-    document.documentElement.style.top = '';
-
-    window.scrollTo(0, __savedScrollY);
-    document.documentElement.style.scrollBehavior = __prevScrollBehavior;
-
-    __scrollLocked = false;
-  }
-
   function closeChat() {
     chatWindow.classList.remove('show');
     chatOverlay.classList.add('hidden');
-    unlockScroll();
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      document.body.classList.remove('no-scroll');
+    }
     setTimeout(() => chatWindow.classList.add('hidden'), 300);
   }
 
@@ -1072,7 +1041,7 @@ async function initializeChatWidget() {
   }
 
   async function sendMessage() {
-    if (isBusy) return;
+    if (isBusy) return;                // ← guard against re-entry
 
     const message = chatInput.value.trim();
     if (!message) return;
