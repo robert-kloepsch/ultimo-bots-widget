@@ -584,9 +584,6 @@ async function initializeChatWidget() {
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
       }
-      .saicf-chat-window .saicf-chat-footer {
-        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
-      }
 
       /* Keep your existing mobile sizing for other bits */
       .saicf-close-chat-widget-icon {
