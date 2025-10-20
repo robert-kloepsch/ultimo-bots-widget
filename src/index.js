@@ -3,33 +3,36 @@
  * Renders the chat widget in a Shadow DOM at #chat-widget-container
  *********************************************************/
 (function bootstrap() {
-  const POLL_INTERVAL = 200;   // ms between checks
-  const MAX_WAIT      = 30000; // safety timeout
-
+  const POLL_INTERVAL = 200;
+  const MAX_WAIT = 60000;
   let waited = 0;
 
-  function tryStart() {
+  function startIfReady() {
     const container = document.getElementById('chat-widget-container');
-
-    // When both the element and data-user-id are present we can go
     if (container && container.getAttribute('data-user-id')) {
       initializeChatWidget();
-      return;
+      return true;
     }
+    return false;
+  }
 
-    // Otherwise keep polling (up to MAX_WAIT)
+  // Use MutationObserver for late-loaded containers (Safari safe)
+  const observer = new MutationObserver(() => {
+    if (startIfReady()) observer.disconnect();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  function tryStart() {
+    if (startIfReady()) return;
     if (waited < MAX_WAIT) {
       waited += POLL_INTERVAL;
       setTimeout(tryStart, POLL_INTERVAL);
     } else {
-      console.error(
-        'Chat widget bootstrap: #chat-widget-container not found ' +
-        `after ${MAX_WAIT / 1000}s - widget aborted`
-      );
+      console.error(`Chat widget bootstrap: container not found after ${MAX_WAIT / 1000}s`);
+      observer.disconnect();
     }
   }
 
-  // Start polling as soon as the DOM is available
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', tryStart);
   } else {
@@ -68,14 +71,24 @@ async function initializeChatWidget() {
   // container.style.position = 'relative';
   // container.style.all = 'initial';
   // container.style.zIndex = '2147483647';
-  container.style.all = 'initial';
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '0';
-  container.style.height = '0';
-  container.style.zIndex = '2147483647';
-  container.style.pointerEvents = 'none';
+  // container.style.all = 'initial';
+  // container.style.position = 'fixed';
+  // container.style.top = '0';
+  // container.style.left = '0';
+  // container.style.width = '0';
+  // container.style.height = '0';
+  // container.style.zIndex = '2147483647';
+  // container.style.pointerEvents = 'none';
+
+  Object.assign(container.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '0',
+    height: '0',
+    zIndex: '2147483647',
+    pointerEvents: 'none',
+  });
 
   const botId = container.getAttribute('data-user-id');
   if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
@@ -95,7 +108,11 @@ async function initializeChatWidget() {
     }
   }
 
+  if (!container.isConnected) {
+    document.body.appendChild(container);
+  }
   const shadowRoot = container.attachShadow({ mode: 'open' });
+
   shadowRoot.host.setAttribute('lang', 'en');
 
   if (!document.getElementById('saicf-global-scroll-style')) {
@@ -920,7 +937,7 @@ async function initializeChatWidget() {
   const popUpCloseBtn = document.createElement('button');
   popUpCloseBtn.className = 'saicf-pop-up-close';
   popUpCloseBtn.innerHTML = `
-    <svg viewBox="0 0 384 512" style="height:1.3em;width:1.3em;fill:currentColor;">
+    <svg viewBox="0 0 384 512" style="height:1.5em; width:1.5em; fill:currentColor; margin-bottom: 2px;">
       <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
     </svg>
   `;
