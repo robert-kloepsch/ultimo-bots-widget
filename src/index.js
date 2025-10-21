@@ -96,6 +96,7 @@ async function initializeChatWidget() {
   const HIDE_POWERED_BY_IDS = [
     '175312141824050790019FvXPU',
     '176042572245566767005MVswy',
+    '176095906261776056032HDPJg',
   ];
 
   const POPUP_KEY = `saicf-popup-seen-${botId}`;
