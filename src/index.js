@@ -113,7 +113,7 @@ async function initializeChatWidget() {
   if (!container.isConnected) {
     document.body.appendChild(container);
   }
-  const shadowRoot = container.attachShadow({ mode: 'open' });
+  const shadowRoot = container.shadowRoot || container.attachShadow({ mode: 'open' });
 
   shadowRoot.host.setAttribute('lang', 'en');
 
