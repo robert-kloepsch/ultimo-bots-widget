@@ -97,6 +97,7 @@ async function initializeChatWidget() {
     '175312141824050790019FvXPU',
     '176042572245566767005MVswy',
     '176095906261776056032HDPJg',
+    '176011305821559093017GijUj',
   ];
 
   const POPUP_KEY = `saicf-popup-seen-${botId}`;
