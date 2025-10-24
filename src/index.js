@@ -682,7 +682,7 @@ async function initializeChatWidget() {
       }
       .widget-user-message,
       .widget-bot-message {
-        font-size: 17px !important;
+        font-size: 17px;
       }
       .saicf-chat-widget-icon {
         width: 70px;
