@@ -563,7 +563,7 @@ async function initializeChatWidget() {
     .saicf-header-actions {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       position: relative; /* anchor menu below */
     }
 
@@ -579,7 +579,7 @@ async function initializeChatWidget() {
       font-size: 20px;
     }
     .saicf-ellipsis-btn:hover { transform: scale(1.08); }
-    .saicf-ellipsis-btn svg { width: 1.2em; height: 1.2em; display: block; }
+    .saicf-ellipsis-btn svg { width: 1.4em; height: 1.4em; display: block; }
 
     .saicf-menu {
       position: absolute;
@@ -663,7 +663,8 @@ async function initializeChatWidget() {
       }
 
       .saicf-chat-header {
-        padding: 15px 8px;
+        padding: 12px 10px;
+        margin-bottom: 5px;
       }
       .saicf-chat-window .saicf-chat-body {
         flex: 1 1 auto !important;
@@ -677,11 +678,11 @@ async function initializeChatWidget() {
         font-size: 22px;
       }
       .saicf-chat-title {
-        font-size: 16px;
+        font-size: 18px;
       }
       .widget-user-message,
       .widget-bot-message {
-        font-size: 17px;
+        font-size: 17px !important;
       }
       .saicf-chat-widget-icon {
         width: 70px;
@@ -859,7 +860,7 @@ async function initializeChatWidget() {
 
           <!-- close X (unchanged) -->
           <button class="saicf-close-btn saicf-close-chat-widget-icon" aria-label="Close chat" style="color:${headerFontColor};">
-            <svg viewBox="0 0 384 512" style="height:1em;width:1em;fill:currentColor;">
+            <svg viewBox="0 0 384 512" style="height:32px;width:32px;fill:currentColor;">
               <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
             </svg>
           </button>
