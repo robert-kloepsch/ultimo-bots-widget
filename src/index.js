@@ -1,22 +1,28 @@
-/*********************************************************
- * index.js
- * Renders the chat widget in a Shadow DOM at #chat-widget-container
- *********************************************************/
+const HIDE_POWERED_BY_IDS = [
+  '175312141824050790019FvXPU',
+  '176042572245566767005MVswy',
+  '176095906261776056032HDPJg',
+  '176011305821559093017GijUj',
+];
+
 (function bootstrap() {
   const POLL_INTERVAL = 200;
   const MAX_WAIT = 60000;
   let waited = 0;
 
+  let started = false;
+
   function startIfReady() {
+    if (started) return true;
     const container = document.getElementById('chat-widget-container');
     if (container && container.getAttribute('data-user-id')) {
+      started = true;
       initializeChatWidget();
       return true;
     }
     return false;
   }
 
-  // Use MutationObserver for late-loaded containers (Safari safe)
   const observer = new MutationObserver(() => {
     if (startIfReady()) observer.disconnect();
   });
@@ -40,8 +46,32 @@
   }
 })();
 
+function addUltimoBacklink(promotingText, botId) {
+  if (
+    HIDE_POWERED_BY_IDS.includes(botId) ||
+    document.querySelector('a[href="https://www.ultimo-bots.com"]')
+  ) {
+    return;
+  }
+
+  const backlink = document.createElement('a');
+  backlink.href = 'https://www.ultimo-bots.com';
+  backlink.target = '_blank';
+  backlink.rel = 'noopener noreferrer';
+  backlink.textContent = promotingText;
+  backlink.style.display = 'block';
+  backlink.style.textAlign = 'center';
+  backlink.style.fontSize = '10px';
+  backlink.style.opacity = '0.5';
+  backlink.style.textDecoration = 'none';
+  backlink.style.color = 'grey';
+  backlink.style.margin = '0';
+  backlink.style.padding = '0';
+
+  document.body.appendChild(backlink);
+}
+
 async function initializeChatWidget() {
-  /************  SEO / PERFORMANCE ADD-ON ① : pre-connect  ***********/
   ['https://portal.ultimo-bots.com', 'https://cdn.jsdelivr.net']
     .forEach(h => {
       if (!document.querySelector(`link[rel="preconnect"][href="${h}"]`)) {
@@ -49,13 +79,11 @@ async function initializeChatWidget() {
         l.rel = 'preconnect'; l.href = h; l.crossOrigin = ''; document.head.appendChild(l);
       }
     });
-  /*******************************************************************/
   let markedReady = typeof marked !== 'undefined';
 
   async function ensureMarked() {
     if (markedReady) return;
 
-    // 👇 tell Webpack to leave this dynamic import alone
     const mod = await import(/* webpackIgnore: true */
       'https://cdn.jsdelivr.net/npm/marked@11.1.1/lib/marked.esm.js');
 
@@ -68,17 +96,6 @@ async function initializeChatWidget() {
   if (!container) { console.error('Chat widget container not found'); return; }
 
   if (container.parentElement !== document.body) document.body.appendChild(container);
-  // container.style.position = 'relative';
-  // container.style.all = 'initial';
-  // container.style.zIndex = '2147483647';
-  // container.style.all = 'initial';
-  // container.style.position = 'fixed';
-  // container.style.top = '0';
-  // container.style.left = '0';
-  // container.style.width = '0';
-  // container.style.height = '0';
-  // container.style.zIndex = '2147483647';
-  // container.style.pointerEvents = 'none';
 
   Object.assign(container.style, {
     position: 'fixed',
@@ -92,13 +109,6 @@ async function initializeChatWidget() {
 
   const botId = container.getAttribute('data-user-id');
   if (!botId) { console.error('User ID not found (data-user-id is missing)'); return; }
-
-  const HIDE_POWERED_BY_IDS = [
-    '175312141824050790019FvXPU',
-    '176042572245566767005MVswy',
-    '176095906261776056032HDPJg',
-    '176011305821559093017GijUj',
-  ];
 
   const POPUP_KEY = `saicf-popup-seen-${botId}`;
   let   popUpSeen = sessionStorage.getItem(POPUP_KEY) === '1';
@@ -717,6 +727,7 @@ async function initializeChatWidget() {
   }
 
   let widgetConfig;
+  let promotingText = 'This website is powered by smart AI chatbots from Ultimo Bots.';
   try {
     const hostPageUrl = encodeURIComponent(window.location.href);
 
@@ -729,47 +740,14 @@ async function initializeChatWidget() {
       throw new Error(`HTTP ${res.status}`);
     }
     widgetConfig = await res.json();
+    promotingText = widgetConfig.promoting_text ?? promotingText;
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
-
-    if (!HIDE_POWERED_BY_IDS.includes(botId)) {
-      const backlink = document.createElement('a');
-      backlink.href = 'https://www.ultimo-bots.com';
-      backlink.target = '_blank';
-      backlink.rel = 'noopener';
-      backlink.textContent =
-        'This website is powered by smart AI chatbots from Ultimo Bot s';
-
-      backlink.style.display = 'block';      // so it sits on its own line
-      backlink.style.textAlign = 'center';   // centered horizontally
-      backlink.style.fontSize = '8px';
-      backlink.style.opacity = '0.01';
-      backlink.style.textDecoration = 'none';
-      backlink.style.color = 'inherit';      // inherit page text color
-
-      document.body.appendChild(backlink);
-    }
-
+    addUltimoBacklink(promotingText, botId);
     return;
   }
 
-  if (!HIDE_POWERED_BY_IDS.includes(botId)) {
-    const backlink = document.createElement('a');
-    backlink.href = 'https://www.ultimo-bots.com';
-    backlink.target = '_blank';
-    backlink.rel = 'noopener';
-    backlink.textContent =
-      'This website is powered by smart AI chatbots from Ultimo Bots';
-
-    backlink.style.display = 'block';      // so it sits on its own line
-    backlink.style.textAlign = 'center';   // centered horizontally
-    backlink.style.fontSize = '8px';
-    backlink.style.opacity = '0.01';
-    backlink.style.textDecoration = 'none';
-    backlink.style.color = 'inherit';      // inherit page text color
-
-    document.body.appendChild(backlink);
-  }
+  addUltimoBacklink(promotingText, botId);
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
@@ -878,7 +856,6 @@ async function initializeChatWidget() {
       </div>
     </div>
   `;
-  // Conditionally include the powered-by HTML
   const poweredByHTML = HIDE_POWERED_BY_IDS.includes(botId)
     ? ''
     : `
@@ -887,7 +864,7 @@ async function initializeChatWidget() {
             href="https://www.ultimo-bots.com"
             target="_blank"
             rel="noopener"
-            title="Our website uses intelligent chatbots powered by Ultimo Bots to improve customer service.">
+            title="${promotingText}">
             Powered by Ultimo Bots
           </a>
         </div>
@@ -913,8 +890,7 @@ async function initializeChatWidget() {
   const popUpContainer = document.createElement('div');
 
   (function zoomWidgetForWixMobile () {
-    /* run only on narrow screens – skip desktop completely */
-    if (window.screen.width > 600) return;          // ← use screen.width here
+    if (window.screen.width > 600) return;
 
     const vp = document.querySelector('meta[name="viewport"][id="wixMobileViewport"]');
     if (!vp) return;
@@ -922,15 +898,14 @@ async function initializeChatWidget() {
     const m = /width\s*=\s*(\d+)/i.exec(vp.content || '');
     if (!m) return;
 
-    const forcedWidth = +m[1];                      // 320
+    const forcedWidth = +m[1];
 
-    const physical    = window.screen.width;        // ← real CSS-px of device
-    if (physical <= forcedWidth) return;            // e.g. old iPhone SE
+    const physical    = window.screen.width;
+    if (physical <= forcedWidth) return;
 
-    const zoomFactor  = forcedWidth / physical;     // ≈ 0.74 on 375-px devices
+    const zoomFactor  = forcedWidth / physical;
 
-    /* zoom rescales visuals *and* hit-testing */
-    container.style.zoom = zoomFactor;              // all major browsers
+    container.style.zoom = zoomFactor;
     container.style.setProperty('-moz-transform', `scale(${zoomFactor})`);
     container.style.setProperty('-moz-transform-origin', 'top left');
   })();
@@ -961,7 +936,6 @@ async function initializeChatWidget() {
     msgEl.innerHTML = msg.replace(/\n/g, '<br>');
     popUpContainer.appendChild(msgEl);
 
-    // ✅ Click opens chat exactly like the widget icon
     msgEl.addEventListener('click', () => {
       ensureMarked().then(() => {
         if (chatBody.childElementCount === 0) {
@@ -1017,70 +991,57 @@ async function initializeChatWidget() {
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer input');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
-
-  // ───────── three-dots menu wiring ─────────
   const ellipsisBtn = chatWindow.querySelector('.saicf-ellipsis-btn');
   const actionsWrap = chatWindow.querySelector('.saicf-header-actions');
   const menu        = chatWindow.querySelector('.saicf-menu');
   const clearBtn    = chatWindow.querySelector('.saicf-menu-item--clear');
 
-  // toggle menu open/close
   function toggleMenu(open) {
     const willOpen = typeof open === 'boolean' ? open : !menu.classList.contains('is-open');
     menu.classList.toggle('is-open', willOpen);
     menu.setAttribute('aria-hidden', String(!willOpen));
   }
 
-  // close menu on outside click (inside shadow DOM)
   shadowRoot.addEventListener('click', (e) => {
     if (!menu.classList.contains('is-open')) return;
-    if (actionsWrap.contains(e.target)) return; // clicks on button/menu are fine
+    if (actionsWrap.contains(e.target)) return;
     toggleMenu(false);
   });
 
-  // also close on Escape
   shadowRoot.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && menu.classList.contains('is-open')) toggleMenu(false);
   });
 
-  // open/close when tapping the dots
   ellipsisBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleMenu();
   });
 
-  // clear chat = new session + wipe messages (+ show welcome again)
   clearBtn.addEventListener('click', (e) => {
     e.preventDefault();
     toggleMenu(false);
 
-    // new session id
     sessionId = generateSessionId();
 
-    // clear UI messages
     chatBody.innerHTML = '';
 
-    // optional: also remove any "loading dots" if present
     const loadingDots = chatBody.querySelector('.saicf-loading-dots');
     if (loadingDots) loadingDots.remove();
 
-    // re-show welcome messages (if configured)
     if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
       welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
     }
 
-    // focus input for convenience
     chatInput.focus();
   });
 
-  // make sure menu never lingers when the chat closes
   const _origCloseChat = closeChat;
   closeChat = function () {
     toggleMenu(false);
     _origCloseChat();
   };
 
-  let isBusy = false; // ← blocks any new user input while bot is responding
+  let isBusy = false;
 
   function getPredefinedChips() {
     return Array.from(chatWindow.querySelectorAll('.saicf-predefined-question'));
@@ -1089,13 +1050,11 @@ async function initializeChatWidget() {
   function setBusy(b) {
     isBusy = b;
 
-    // Inputs
     chatInput.disabled = b;
     sendMessageBtn.disabled = b;
     chatInput.setAttribute('aria-disabled', String(b));
     sendMessageBtn.setAttribute('aria-disabled', String(b));
 
-    // Predefined question chips
     getPredefinedChips().forEach(chip => {
       chip.classList.toggle('is-disabled', b);
       chip.tabIndex = b ? -1 : 0;
@@ -1103,7 +1062,6 @@ async function initializeChatWidget() {
     });
   }
 
-  /* ───────── predefined‑question chips ───────── */
   const predefinedContainer = chatWindow.querySelector('.saicf-predefined-container');
 
   let predefinedQuestions = widgetConfig.predefined_questions ?? [];
@@ -1128,7 +1086,7 @@ async function initializeChatWidget() {
       chip.textContent  = q;
 
       chip.addEventListener('click', () => {
-        if (isBusy) return;          // ignore while streaming
+        if (isBusy) return;
         chatInput.value = q;
         sendMessage();
       });
@@ -1227,12 +1185,11 @@ async function initializeChatWidget() {
   }
 
   async function sendMessage() {
-    if (isBusy) return;                // ← guard against re-entry
+    if (isBusy) return;
 
     const message = chatInput.value.trim();
     if (!message) return;
 
-    // show the user’s message
     appendMessage(message, 'user');
     chatInput.value = '';
 
@@ -1248,7 +1205,7 @@ async function initializeChatWidget() {
 
     const finish = () => {
       setLoading(false);
-      setBusy(false);                  // ← re-enable everything only now
+      setBusy(false);
       scrollToBottom();
     };
 
