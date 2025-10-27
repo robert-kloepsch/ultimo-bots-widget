@@ -62,9 +62,9 @@ function addUltimoBacklink(promotingText, botId) {
   backlink.style.display = 'block';
   backlink.style.textAlign = 'center';
   backlink.style.fontSize = '6px';
-  backlink.style.opacity = '0.8';
+  backlink.style.opacity = '1.0';
   backlink.style.textDecoration = 'none';
-  backlink.style.color = 'grey';
+  backlink.style.color = '#555555';
   backlink.style.margin = '0';
   backlink.style.padding = '0';
   backlink.style.paddingTop = '2px';
