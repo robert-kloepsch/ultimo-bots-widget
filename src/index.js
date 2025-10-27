@@ -61,12 +61,14 @@ function addUltimoBacklink(promotingText, botId) {
   backlink.textContent = promotingText;
   backlink.style.display = 'block';
   backlink.style.textAlign = 'center';
-  backlink.style.fontSize = '8px';
-  backlink.style.opacity = '0.3';
+  backlink.style.fontSize = '6px';
+  backlink.style.opacity = '0.8';
   backlink.style.textDecoration = 'none';
   backlink.style.color = 'grey';
   backlink.style.margin = '0';
   backlink.style.padding = '0';
+  backlink.style.paddingTop = '2px';
+  backlink.style.paddingBottom = '2px';
 
   document.body.appendChild(backlink);
 }
