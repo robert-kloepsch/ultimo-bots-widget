@@ -710,6 +710,10 @@ async function initializeChatWidget() {
         padding: 7px 10px;
         font-size: 14px;
       }
+      .saicf-chat-window.align-left {
+        left: 0 !important;
+        right: 0 !important;
+      }
     }
   `;
   shadowRoot.appendChild(styleTag);
