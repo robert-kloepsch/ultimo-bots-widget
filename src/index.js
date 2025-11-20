@@ -5,6 +5,71 @@ const HIDE_POWERED_BY_IDS = [
   '176011305821559093017GijUj',
 ];
 
+const FONT_SOURCES = {
+  'inter, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap',
+  'roboto, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap',
+  'open sans, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap',
+  'poppins, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap',
+  'montserrat, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&display=swap',
+  'lato, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap',
+  'nunito, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Nunito:wght@400;600&display=swap',
+  'source sans 3, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&display=swap',
+  'playfair display, serif':
+    'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap',
+  'manrope, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap',
+  'raleway, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600&display=swap',
+  'dm sans, sans-serif':
+    'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap',
+  'work sans, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap',
+  'karla, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Karla:wght@400;600&display=swap',
+  'nunito sans, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600&display=swap',
+  'pt sans, sans-serif':
+    'https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap',
+  'oswald, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&display=swap',
+  'space grotesk, sans-serif':
+    'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap',
+  'merriweather, serif':
+    'https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap',
+  'libre baskerville, serif':
+    'https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap',
+};
+
+function normalizeFontKey(fontFamily = '') {
+  return fontFamily
+    .toLowerCase()
+    .replace(/["']/g, '')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function ensureFontLoaded(fontFamily) {
+  if (!fontFamily) return;
+  const key = normalizeFontKey(fontFamily);
+  const href = FONT_SOURCES[key];
+  if (!href) return;
+  if (document.querySelector(`link[data-ultimo-font="${key}"]`)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  link.setAttribute('data-ultimo-font', key);
+  document.head.appendChild(link);
+}
+
 (function bootstrap() {
   const POLL_INTERVAL = 200;
   const MAX_WAIT = 60000;
@@ -154,7 +219,7 @@ async function initializeChatWidget() {
     :host {
       all: initial;
       box-sizing: border-box;
-      font-family: "DM Sans", sans-serif;
+      font-family: var(--saicf-font-family, "DM Sans", sans-serif);
       z-index: 2147483647 !important;
       position: fixed !important;   /* 👈 add this */
       top: 0; left: 0; width: 0; height: 0;
@@ -171,7 +236,7 @@ async function initializeChatWidget() {
     }
 
     :host, .saicf-chat-window, .saicf-chat-window * {
-      font-family: "DM Sans", sans-serif !important;
+      font-family: var(--saicf-font-family, "DM Sans", sans-serif) !important;
     }
 
     :host {
@@ -208,7 +273,7 @@ async function initializeChatWidget() {
     }
     .saicf-chat-title {
       font-size: 15px;
-      font-weight: 600;
+      font-weight: 700;
     }
     .saicf-chat-window {
       position: fixed;
@@ -327,12 +392,39 @@ async function initializeChatWidget() {
       background-color: #0595d3;
       transform: translateY(-1.5px);
     }
+    .saicf-message-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0px;
+      margin: 6px 0;
+    }
+    .saicf-message-row.user {
+      justify-content: flex-end;
+    }
+    .saicf-message-row.user .saicf-widget-message {
+      margin-left: auto;
+    }
+    .saicf-message-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-size: cover;
+      background-position: center;
+      background-color: rgba(0,0,0,0.05);
+      border: 1px solid rgba(0,0,0,0.08);
+      flex-shrink: 0;
+      margin-top: 7px;
+    }
+
     .saicf-widget-message {
       max-width: 80%;
       margin: 5px 0;
       padding: 5px;
       border-radius: 10px;
       display: inline-block;
+    }
+    .saicf-message-row.bot .saicf-widget-message {
+      max-width: calc(100% - 48px);
     }
     .widget-user-message {
       align-self: flex-end !important;
@@ -365,6 +457,11 @@ async function initializeChatWidget() {
     .saicf-widget-send-icon {
       font-size: 18px;
       font-style: normal;
+    }
+    .saicf-loading-row {
+      display: flex;
+      justify-content: flex-start;
+      margin: 6px 0;
     }
     .saicf-loading-dots {
       display: flex;
@@ -765,6 +862,12 @@ async function initializeChatWidget() {
   const popUpDelaySeconds   = widgetConfig.pop_up_delay_seconds    ?? 2;
   const popUpMessages       = widgetConfig.pop_up_messages         ?? false;
   const inputPlaceholder    = widgetConfig.input_placeholder       || 'Type your message...';
+  const avatar              = widgetConfig.avatar_icon_path        || null;
+  const fontFamily          = (widgetConfig.font_family && String(widgetConfig.font_family).trim())
+    || '"DM Sans", sans-serif';
+
+  ensureFontLoaded(fontFamily);
+  shadowRoot.host.style.setProperty('--saicf-font-family', fontFamily);
 
   let isPulsing = false;
   if (typeof widgetConfig.pulsing === 'boolean') {
@@ -1025,8 +1128,14 @@ async function initializeChatWidget() {
 
     chatBody.innerHTML = '';
 
-    const loadingDots = chatBody.querySelector('.saicf-loading-dots');
-    if (loadingDots) loadingDots.remove();
+    const loadingRow = chatBody.querySelector('.saicf-loading-row');
+    if (loadingRow) {
+      loadingRow.remove();
+    } else {
+      const legacyDots = chatBody.querySelector('.saicf-loading-dots');
+      if (legacyDots) legacyDots.remove();
+    }
+    resetStreamingBotMessage();
 
     if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
       welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
@@ -1038,6 +1147,7 @@ async function initializeChatWidget() {
   const _origCloseChat = closeChat;
   closeChat = function () {
     toggleMenu(false);
+    resetStreamingBotMessage();
     _origCloseChat();
   };
 
@@ -1097,6 +1207,8 @@ async function initializeChatWidget() {
 
   let sessionId = generateSessionId();
   let widgetOpenedOnce = popUpSeen;
+  let streamingBotRow = null;
+  let streamingBotBubble = null;
 
   chatWidgetIcon.addEventListener('click', () => {
     ensureMarked().then(() => {
@@ -1197,6 +1309,7 @@ async function initializeChatWidget() {
     setLoading(true);
 
     let currentBotMessage = '';
+    resetStreamingBotMessage();
 
     const url =
       `https://portal.ultimo-bots.com/api/chatbot_response?` +
@@ -1206,6 +1319,7 @@ async function initializeChatWidget() {
     const finish = () => {
       setLoading(false);
       setBusy(false);
+      resetStreamingBotMessage();
       scrollToBottom();
     };
 
@@ -1220,12 +1334,11 @@ async function initializeChatWidget() {
           firstChunk = false;
         }
         currentBotMessage += chunk.replace(/<newline>/g, '\n');
-        updateBotMessage(currentBotMessage);
-        scrollToBottom();
+        updateStreamingBotMessage(currentBotMessage);
       };
 
       es.addEventListener('end', () => {
-        updateBotMessage(currentBotMessage);
+        updateStreamingBotMessage(currentBotMessage);
         es.close();
         finish();
         resolve();
@@ -1234,6 +1347,7 @@ async function initializeChatWidget() {
       es.addEventListener('error', (e) => {
         if (e?.data === 'Timeout while generating response') {
           es.close();
+          resetStreamingBotMessage();
           appendMessage(
             'Sorry, the server took too long to respond. Please try again.',
             'bot'
@@ -1245,28 +1359,61 @@ async function initializeChatWidget() {
     });
   }
 
-  function updateBotMessage(text) {
-    const lastMessage = chatBody.lastElementChild;
-    if (lastMessage && lastMessage.classList.contains('widget-bot-message')) {
-      if (typeof marked !== 'undefined') {
-        lastMessage.innerHTML = marked.parse(text);
-      } else {
-        lastMessage.textContent = text;
-      }
-    } else {
-      appendMessage(text, 'bot');
+  function createMessageRow(text, sender) {
+    const row = document.createElement('div');
+    row.className = `saicf-message-row ${sender}`;
+    row.dataset.sender = sender;
+
+    if (sender === 'bot' && avatar) {
+      const avatarEl = document.createElement('div');
+      avatarEl.className = 'saicf-message-avatar';
+      avatarEl.style.backgroundImage = `url("${avatar}")`;
+      row.appendChild(avatarEl);
     }
+
+    const bubble = document.createElement('div');
+    bubble.className = `saicf-widget-message widget-${sender}-message`;
+    if (typeof marked !== 'undefined') {
+      bubble.innerHTML = marked.parse(text);
+    } else {
+      bubble.textContent = text;
+    }
+    row.appendChild(bubble);
+    return row;
   }
 
-  function appendMessage(text, sender) {
-    const messageElement = document.createElement('div');
-    messageElement.className = `saicf-widget-message widget-${sender}-message`;
-    if (typeof marked !== 'undefined') {
-      messageElement.innerHTML = marked.parse(text);
-    } else {
-      messageElement.textContent = text;
+  function appendMessage(text, sender, options = {}) {
+    const row = createMessageRow(text, sender);
+    chatBody.appendChild(row);
+    if (!options.skipScroll) {
+      scrollToBottom();
     }
-    chatBody.appendChild(messageElement);
+    return row;
+  }
+
+  function resetStreamingBotMessage() {
+    streamingBotRow = null;
+    streamingBotBubble = null;
+  }
+
+  function ensureStreamingBotBubble() {
+    if (!streamingBotBubble || !streamingBotBubble.isConnected) {
+      streamingBotRow = appendMessage('', 'bot', { skipScroll: true });
+      streamingBotBubble = streamingBotRow
+        ? streamingBotRow.querySelector('.widget-bot-message')
+        : null;
+    }
+    return streamingBotBubble;
+  }
+
+  function updateStreamingBotMessage(text) {
+    const bubble = ensureStreamingBotBubble();
+    if (!bubble) return;
+    if (typeof marked !== 'undefined') {
+      bubble.innerHTML = marked.parse(text);
+    } else {
+      bubble.textContent = text;
+    }
     scrollToBottom();
   }
 
@@ -1275,17 +1422,16 @@ async function initializeChatWidget() {
   }
 
   function setLoading(isLoading) {
+    const existing = chatBody.querySelector('.saicf-loading-row');
     if (isLoading) {
-      const loadingDots = document.createElement('div');
-      loadingDots.className = 'saicf-loading-dots';
-      loadingDots.innerHTML = '<div></div><div></div><div></div>';
-      chatBody.appendChild(loadingDots);
+      if (existing) return;
+      const row = document.createElement('div');
+      row.className = 'saicf-loading-row';
+      row.innerHTML = '<div class="saicf-loading-dots"><div></div><div></div><div></div></div>';
+      chatBody.appendChild(row);
       scrollToBottom();
-    } else {
-      const loadingDots = chatBody.querySelector('.saicf-loading-dots');
-      if (loadingDots) {
-        loadingDots.remove();
-      }
+    } else if (existing) {
+      existing.remove();
     }
   }
 }
