@@ -3,6 +3,7 @@ const HIDE_POWERED_BY_IDS = [
   '176042572245566767005MVswy',
   '176095906261776056032HDPJg',
   '176011305821559093017GijUj',
+  '175283858733370641363Yziot',
 ];
 
 const FONT_SOURCES = {
@@ -126,12 +127,14 @@ function addUltimoBacklink(promotingText, botId) {
   backlink.textContent = promotingText;
   backlink.style.display = 'block';
   backlink.style.textAlign = 'center';
-  backlink.style.fontSize = '8px';
-  backlink.style.opacity = '0.3';
+  backlink.style.fontSize = '4px';
+  backlink.style.opacity = '0.9';
   backlink.style.textDecoration = 'none';
-  backlink.style.color = 'grey';
+  backlink.style.color = '#555555';
   backlink.style.margin = '0';
   backlink.style.padding = '0';
+  backlink.style.paddingTop = '2px';
+  backlink.style.paddingBottom = '2px';
 
   document.body.appendChild(backlink);
 }
@@ -807,6 +810,10 @@ async function initializeChatWidget() {
         padding: 7px 10px;
         font-size: 14px;
       }
+      .saicf-chat-window.align-left {
+        left: 0 !important;
+        right: 0 !important;
+      }
     }
   `;
   shadowRoot.appendChild(styleTag);
@@ -947,7 +954,7 @@ async function initializeChatWidget() {
           </button>
 
           <!-- dropdown menu -->
-          <div class="saicf-menu" role="menu" aria-hidden="true">
+          <div class="saicf-menu" role="menu" hidden>
             <button class="saicf-menu-item saicf-menu-item--clear" role="menuitem">
               <svg viewBox="0 0 448 512" fill="currentColor">
                 <path d="M135.2 17.7c2.9-10.7 12.7-17.7 23.8-17.7h129.9c11.1 0 20.9 7.1 23.8 17.7L328 32H432c8.8 0 16 7.2 16 16s-7.2 16-16 16H416 32 16C7.2 64 0 56.8 0 48S7.2 32 16 32H120l15.2-14.3zM64 96H384l-21.2 355.9c-1.5 25.1-22.3 44.1-47.4 44.1H132.6c-25.1 0-45.9-19-47.4-44.1L64 96z"/>
@@ -1017,6 +1024,7 @@ async function initializeChatWidget() {
 
   const popUpCloseBtn = document.createElement('button');
   popUpCloseBtn.className = 'saicf-pop-up-close';
+  popUpCloseBtn.setAttribute('aria-label', 'Close pop-up message');
   popUpCloseBtn.innerHTML = `
     <svg viewBox="0 0 384 512" style="height:1.5em; width:1.5em; fill:currentColor; margin-bottom: 2px;">
       <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
@@ -1094,16 +1102,23 @@ async function initializeChatWidget() {
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer input');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
-  const ellipsisBtn = chatWindow.querySelector('.saicf-ellipsis-btn');
-  const actionsWrap = chatWindow.querySelector('.saicf-header-actions');
-  const menu        = chatWindow.querySelector('.saicf-menu');
-  const clearBtn    = chatWindow.querySelector('.saicf-menu-item--clear');
+  const ellipsisBtn    = chatWindow.querySelector('.saicf-ellipsis-btn');
+  const actionsWrap    = chatWindow.querySelector('.saicf-header-actions');
+  const menu           = chatWindow.querySelector('.saicf-menu');
+  const clearBtn       = chatWindow.querySelector('.saicf-menu-item--clear');
 
-  function toggleMenu(open) {
-    const willOpen = typeof open === 'boolean' ? open : !menu.classList.contains('is-open');
-    menu.classList.toggle('is-open', willOpen);
-    menu.setAttribute('aria-hidden', String(!willOpen));
+function toggleMenu(open) {
+  const willOpen = typeof open === 'boolean' ? open : !menu.classList.contains('is-open');
+  menu.classList.toggle('is-open', willOpen);
+  if (willOpen) {
+    menu.removeAttribute('aria-hidden');
+    menu.removeAttribute('hidden');
+  } else {
+    menu.setAttribute('aria-hidden', 'true');
+    menu.setAttribute('hidden', '');
   }
+}
+
 
   shadowRoot.addEventListener('click', (e) => {
     if (!menu.classList.contains('is-open')) return;
