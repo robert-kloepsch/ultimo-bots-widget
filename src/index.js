@@ -1,11 +1,3 @@
-const HIDE_POWERED_BY_IDS = [
-  '175312141824050790019FvXPU',
-  '176042572245566767005MVswy',
-  '176095906261776056032HDPJg',
-  '176011305821559093017GijUj',
-  '175283858733370641363Yziot',
-];
-
 const FONT_SOURCES = {
   'inter, sans-serif':
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap',
@@ -112,9 +104,9 @@ function ensureFontLoaded(fontFamily) {
   }
 })();
 
-function addUltimoBacklink(promotingText, botId) {
+function addUltimoBacklink(promotingText, removePoweredBy) {
   if (
-    HIDE_POWERED_BY_IDS.includes(botId) ||
+    removePoweredBy ||
     document.querySelector('a[href="https://www.ultimo-bots.com"]')
   ) {
     return;
@@ -847,11 +839,12 @@ async function initializeChatWidget() {
     promotingText = widgetConfig.promoting_text ?? promotingText;
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
-    addUltimoBacklink(promotingText, botId);
+    addUltimoBacklink(promotingText, false);
     return;
   }
 
-  addUltimoBacklink(promotingText, botId);
+  const removePoweredBy     = widgetConfig.remove_powered_by       ?? false;
+  addUltimoBacklink(promotingText, removePoweredBy);
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
@@ -966,7 +959,7 @@ async function initializeChatWidget() {
       </div>
     </div>
   `;
-  const poweredByHTML = HIDE_POWERED_BY_IDS.includes(botId)
+  const poweredByHTML = removePoweredBy
     ? ''
     : `
         <div class="saicf-powered-by">
