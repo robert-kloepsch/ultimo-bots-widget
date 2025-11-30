@@ -435,6 +435,17 @@ async function initializeChatWidget() {
       border-radius: 8px;
       font-size: 15px !important;
     }
+    /* Headings inside bot bubbles: same size as paragraph */
+    .widget-bot-message h1,
+    .widget-bot-message h2,
+    .widget-bot-message h3,
+    .widget-bot-message h4,
+    .widget-bot-message h5,
+    .widget-bot-message h6 {
+      font-size: 1em !important;
+      line-height: inherit !important;
+      margin: 0 0 .9em !important;
+    }
     .widget-bot-message strong {
       color: rgb(57, 57, 57);
     }
@@ -448,6 +459,17 @@ async function initializeChatWidget() {
     .widget-user-message > :last-child,
     .widget-bot-message > :last-child {
       margin-bottom: 0;
+    }
+    /* Headings inside user bubbles: same size as paragraph */
+    .widget-user-message h1,
+    .widget-user-message h2,
+    .widget-user-message h3,
+    .widget-user-message h4,
+    .widget-user-message h5,
+    .widget-user-message h6 {
+      font-size: 1em !important;
+      line-height: inherit !important;
+      margin: 0 0 .9em !important;
     }
     .saicf-widget-send-icon {
       font-size: 18px;
