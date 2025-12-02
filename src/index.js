@@ -1155,6 +1155,8 @@ function toggleMenu(open) {
     toggleMenu(false);
 
     sessionId = generateSessionId();
+    sessionStorage.setItem(`sessionId-${botId}`, sessionId);
+    sessionStorage.removeItem(`chat-history-${botId}`);
 
     chatBody.innerHTML = '';
 
@@ -1235,17 +1237,20 @@ function toggleMenu(open) {
     });
   }
 
-  let sessionId = generateSessionId();
+  let sessionId = sessionStorage.getItem(`sessionId-${botId}`) || generateSessionId();
+  sessionStorage.setItem(`sessionId-${botId}`, sessionId);
   let widgetOpenedOnce = popUpSeen;
   let streamingBotRow = null;
   let streamingBotBubble = null;
 
-  chatWidgetIcon.addEventListener('click', () => {
-    ensureMarked().then(() => {
+  chatWidgetIcon.addEventListener('click', async () => {
+    if (chatBody.childElementCount === 0) {
+      await loadChatHistory();
       if (chatBody.childElementCount === 0) {
+        await ensureMarked();
         welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
       }
-    });
+    }
     chatWindow.classList.remove('hidden');
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
@@ -1349,6 +1354,7 @@ function toggleMenu(open) {
     const finish = () => {
       setLoading(false);
       setBusy(false);
+      saveChatHistory();
       resetStreamingBotMessage();
       scrollToBottom();
     };
@@ -1418,6 +1424,9 @@ function toggleMenu(open) {
     if (!options.skipScroll) {
       scrollToBottom();
     }
+    if (!options.skipSave) {
+      saveChatHistory();
+    }
     return row;
   }
 
@@ -1428,7 +1437,7 @@ function toggleMenu(open) {
 
   function ensureStreamingBotBubble() {
     if (!streamingBotBubble || !streamingBotBubble.isConnected) {
-      streamingBotRow = appendMessage('', 'bot', { skipScroll: true });
+      streamingBotRow = appendMessage('', 'bot', { skipScroll: true, skipSave: true });
       streamingBotBubble = streamingBotRow
         ? streamingBotRow.querySelector('.widget-bot-message')
         : null;
@@ -1462,6 +1471,65 @@ function toggleMenu(open) {
       scrollToBottom();
     } else if (existing) {
       existing.remove();
+    }
+  }
+
+  function saveChatHistory() {
+    const messages = Array.from(chatBody.querySelectorAll('.saicf-message-row'))
+      .filter(row => !row.classList.contains('saicf-loading-row'))
+      .map(row => {
+        const bubble = row.querySelector('.saicf-widget-message');
+        const text = bubble ? bubble.innerHTML : '';
+        return {
+          text: text,
+          sender: row.dataset.sender
+        };
+      });
+    const data = JSON.stringify(messages);
+    sessionStorage.setItem(`chat-history-${botId}`, data);
+  }
+
+  async function loadChatHistory() {
+    const saved = sessionStorage.getItem(`chat-history-${botId}`);
+    if (!saved) {
+      return;
+    }
+
+    await ensureMarked();
+
+    try {
+      const messages = JSON.parse(saved);
+
+      messages.forEach((msg) => {
+        const row = document.createElement('div');
+        row.className = `saicf-message-row ${msg.sender}`;
+        row.dataset.sender = msg.sender;
+
+        if (msg.sender === 'bot' && avatar) {
+          const avatarEl = document.createElement('div');
+          avatarEl.className = 'saicf-message-avatar';
+          avatarEl.style.backgroundImage = `url("${avatar}")`;
+          row.appendChild(avatarEl);
+        }
+
+        const bubble = document.createElement('div');
+        bubble.className = `saicf-widget-message widget-${msg.sender}-message`;
+
+        // Set the HTML directly - it's already processed
+        if (msg.text) {
+          bubble.innerHTML = msg.text;
+        } else {
+          bubble.textContent = '(empty message)';
+        }
+
+        row.appendChild(bubble);
+        chatBody.appendChild(row);
+      });
+
+      scrollToBottom();
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      sessionStorage.removeItem(`chat-history-${botId}`);
     }
   }
 }

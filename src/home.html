@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - Ultimo Bots Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        nav {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+        
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        
+        nav ul li a:hover {
+            color: #3498db;
+        }
+        
+        nav ul li a.active {
+            color: #3498db;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 4px;
+        }
+        
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+        
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .hero p {
+            font-size: 1.25rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .feature-card h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+        
+        .cta-button {
+            background: #3498db;
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 1rem;
+        }
+        
+        .cta-button:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="home.html" class="active">Home</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="services.html">Services</a></li>
+            <li><a href="contact.html">Contact</a></li>
+        </ul>
+    </nav>
+    
+    <div class="hero">
+        <h1>Welcome to Ultimo Bots</h1>
+        <p>Powerful AI chatbots that engage your customers and grow your business</p>
+    </div>
+    
+    <div class="container">
+        <h2 style="text-align: center; margin-bottom: 2rem;">Why Choose Ultimo Bots?</h2>
+        
+        <div class="features">
+            <div class="feature-card">
+                <h3>🤖 AI-Powered</h3>
+                <p>Our chatbots use advanced AI technology to understand and respond to your customers naturally and intelligently.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>⚡ Lightning Fast</h3>
+                <p>Get instant responses to customer queries 24/7, improving satisfaction and reducing support costs.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>🎨 Customizable</h3>
+                <p>Fully customize the look, feel, and behavior of your chatbot to match your brand perfectly.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>📊 Analytics</h3>
+                <p>Track conversations, understand customer needs, and optimize your bot's performance with detailed analytics.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>🔒 Secure</h3>
+                <p>Enterprise-grade security ensures your customer data is always protected and compliant.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>🌍 Multi-Language</h3>
+                <p>Support customers in multiple languages and expand your global reach effortlessly.</p>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 3rem;">
+            <a href="contact.html" class="cta-button">Get Started Today</a>
+        </div>
+    </div>
+    
+    <!-- Chat Widget -->
+    <div id="chat-widget-container" data-user-id="17484411083762250247QKLKy"></div>
+    <script src="index.js"></script>
+</body>
+</html>
