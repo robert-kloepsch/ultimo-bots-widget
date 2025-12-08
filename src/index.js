@@ -1381,42 +1381,16 @@ function toggleMenu(open) {
       });
 
       es.addEventListener('error', (e) => {
-        es.close();
-        
-        // Check for rate limit (429) by making a HEAD request
-        fetch(url, { method: 'HEAD' })
-          .then(response => {
-            if (response.status === 429) {
-              resetStreamingBotMessage();
-              appendMessage(
-                'Too many requests. Please try again later.',
-                'bot'
-              );
-            } else if (e?.data === 'Timeout while generating response') {
-              resetStreamingBotMessage();
-              appendMessage(
-                'Sorry, the server took too long to respond. Please try again.',
-                'bot'
-              );
-            } else {
-              resetStreamingBotMessage();
-              appendMessage(
-                'Something went wrong. Please try again.',
-                'bot'
-              );
-            }
-            finish();
-            resolve();
-          })
-          .catch(() => {
-            resetStreamingBotMessage();
-            appendMessage(
-              'Connection error. Please try again.',
-              'bot'
-            );
-            finish();
-            resolve();
-          });
+        if (e?.data === 'Timeout while generating response') {
+          es.close();
+          resetStreamingBotMessage();
+          appendMessage(
+            'Sorry, the server took too long to respond. Please try again.',
+            'bot'
+          );
+          finish();
+          resolve();
+        }
       });
     });
   }
