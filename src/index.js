@@ -1359,9 +1359,20 @@ function toggleMenu(open) {
       scrollToBottom();
     };
 
+    // Error messages for different error types
+    const ERROR_MESSAGES = {
+      rate_limit: 'Too many requests. Please wait a moment before trying again.',
+      timeout: 'Sorry, the server took too long to respond. Please try again.',
+      internal_error: 'Something went wrong. Please try again later.',
+      validation_error: 'There was a problem with your request. Please try again.',
+      bot_not_found: 'This chatbot is currently unavailable.',
+      default: 'An unexpected error occurred. Please try again.'
+    };
+
     return new Promise((resolve) => {
       const es = new EventSource(url);
       let firstChunk = true;
+      let hasError = false;
 
       es.onmessage = ({ data: chunk }) => {
         if (chunk === 'end of response') return;
@@ -1374,24 +1385,69 @@ function toggleMenu(open) {
       };
 
       es.addEventListener('end', () => {
-        updateStreamingBotMessage(currentBotMessage);
+        if (!hasError) {
+          updateStreamingBotMessage(currentBotMessage);
+        }
         es.close();
         finish();
         resolve();
       });
 
       es.addEventListener('error', (e) => {
-        if (e?.data === 'Timeout while generating response') {
+        hasError = true;
+        es.close();
+        resetStreamingBotMessage();
+
+        // Parse the error data (now sent as JSON)
+        let errorType = 'default';
+        let errorMessage = ERROR_MESSAGES.default;
+
+        try {
+          if (e?.data) {
+            // Handle legacy format (plain string)
+            if (e.data === 'Timeout while generating response') {
+              errorType = 'timeout';
+            } else if (e.data === 'Internal server error') {
+              errorType = 'internal_error';
+            } else {
+              // Try to parse as JSON (new format)
+              const errorData = JSON.parse(e.data);
+              errorType = errorData.type || 'default';
+            }
+            errorMessage = ERROR_MESSAGES[errorType] || ERROR_MESSAGES.default;
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, use default error message
+          console.warn('Could not parse error data:', e?.data);
+        }
+
+        appendMessage(errorMessage, 'bot');
+        finish();
+        resolve();
+      });
+
+      // Handle EventSource connection errors (network issues, etc.)
+      es.onerror = (e) => {
+        // Only handle if not already handled by 'error' event listener
+        if (hasError) return;
+
+        // EventSource will auto-reconnect by default - we don't want that for errors
+        if (es.readyState === EventSource.CLOSED) {
+          hasError = true;
+          resetStreamingBotMessage();
+          appendMessage(ERROR_MESSAGES.default, 'bot');
+          finish();
+          resolve();
+        } else if (es.readyState === EventSource.CONNECTING) {
+          // Connection lost, close and show error
+          hasError = true;
           es.close();
           resetStreamingBotMessage();
-          appendMessage(
-            'Sorry, the server took too long to respond. Please try again.',
-            'bot'
-          );
+          appendMessage('Connection lost. Please try again.', 'bot');
           finish();
           resolve();
         }
-      });
+      };
     });
   }
 
