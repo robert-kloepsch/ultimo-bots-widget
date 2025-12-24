@@ -362,14 +362,24 @@ async function initializeChatWidget() {
       border-top: 1px solid #f1f1f1;
       padding: 10px;
       background-color: #fafafa;
+      align-items: flex-end;
     }
-    .saicf-chat-footer input {
+    .saicf-chat-footer textarea {
       flex: 1 !important;
-      padding: 7px !important;
+      padding: 10px !important;
       border: 1px solid #ccc !important;
       border-radius: 8px !important;
       outline: none !important;
       font-size: 16px !important;
+      font-family: inherit !important;
+      resize: none !important;
+      line-height: 24px !important;
+      max-height: 140px !important;
+      overflow-y: hidden !important;
+      box-sizing: border-box !important;
+    }
+    .saicf-chat-footer textarea.has-overflow {
+      overflow-y: auto !important;
     }
     .saicf-chat-footer button {
       display: flex;
@@ -382,6 +392,9 @@ async function initializeChatWidget() {
       border-radius: 10px;
       cursor: pointer;
       transition: background-color 0.4s ease, transform 0.2s ease;
+      height: 44px;
+      min-height: 44px;
+      align-self: flex-end;
     }
     .saicf-chat-footer button:hover {
       background-color: #0595d3;
@@ -674,7 +687,7 @@ async function initializeChatWidget() {
       opacity: .5 !important;
       cursor: not-allowed !important;
     }
-    .saicf-chat-footer input:disabled {
+    .saicf-chat-footer textarea:disabled {
       background: #f5f5f5 !important;
       cursor: not-allowed !important;
     }
@@ -1002,7 +1015,7 @@ async function initializeChatWidget() {
       <div class="saicf-predefined-container hidden"></div>
       ${poweredByHTML}
       <div class="saicf-input-send-container">
-        <input type="text" class="saicf-chat-input" placeholder="${inputPlaceholder}">
+        <textarea class="saicf-chat-input" placeholder="${inputPlaceholder}" rows="1"></textarea>
         <button class="saicf-send-message" style="background-color:${themeColor};" aria-label="Send message">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" style="width: 16px; height: 16px; fill: ${headerFontColor};">
             <path d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0L7 203.6c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 140.3V464c0 17.7 14.3 32 32 32s32-14.3 32-32V140.3l107.6 108.7c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L214.6 41.4z"/>
@@ -1115,7 +1128,7 @@ async function initializeChatWidget() {
 
   const closeChatBtn   = chatWindow.querySelector('.saicf-close-btn');
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
-  const chatInput      = chatWindow.querySelector('.saicf-chat-footer input');
+  const chatInput      = chatWindow.querySelector('.saicf-chat-footer textarea');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
   const ellipsisBtn    = chatWindow.querySelector('.saicf-ellipsis-btn');
   const actionsWrap    = chatWindow.querySelector('.saicf-header-actions');
@@ -1272,12 +1285,33 @@ function toggleMenu(open) {
     sendMessage();
   });
 
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      if (isBusy) { e.preventDefault(); return; }
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (isBusy) return;
       sendMessage();
     }
   });
+
+  chatInput.addEventListener('input', () => {
+    resizeTextarea(chatInput);
+  });
+
+  function resizeTextarea(el) {
+    el.style.height = 'auto';
+    const lineHeight = 24;
+    const maxLines = 5;
+    const padding = 20;
+    const maxHeight = (lineHeight * maxLines) + padding;
+    const minHeight = lineHeight + padding;
+    const newHeight = el.value ? Math.min(el.scrollHeight, maxHeight) : minHeight;
+    el.style.height = newHeight + 'px';
+    if (el.scrollHeight > maxHeight) {
+      el.classList.add('has-overflow');
+    } else {
+      el.classList.remove('has-overflow');
+    }
+  }
 
   popUpCloseBtn.addEventListener('click', e => {
     e.stopPropagation();
@@ -1339,6 +1373,7 @@ function toggleMenu(open) {
 
     appendMessage(message, 'user');
     chatInput.value = '';
+    resizeTextarea(chatInput);
 
     setBusy(true);
     setLoading(true);
