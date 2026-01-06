@@ -292,7 +292,7 @@ async function initializeChatWidget() {
       transform: translateY(0);
     }
     .hidden {
-      display: none;
+      display: none !important;
     }
     .saicf-chat-header {
       color: white;
@@ -842,6 +842,171 @@ async function initializeChatWidget() {
         right: 0 !important;
       }
     }
+
+    /* ───────── Loading Spinner ───────── */
+    .saicf-config-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      background: #fff;
+      min-height: 0;
+      border-radius: 0 0 16px 16px;
+    }
+
+    .saicf-config-spinner {
+      width: 32px;
+      height: 32px;
+      color: #5616ea;
+      animation: saicf-spin 1s linear infinite;
+    }
+
+    @keyframes saicf-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ───────── Pre-chat Form ───────── */
+    .saicf-pre-chat-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 30px 24px;
+      flex: 1;
+      min-height: 0;
+      text-align: center;
+      background: #fff;
+      overflow-y: auto;
+      border-radius: 0 0 16px 16px;
+    }
+
+    .saicf-pre-chat-header {
+      margin-bottom: 24px;
+      flex-shrink: 0;
+    }
+
+    .saicf-pre-chat-icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+      color: #5616ea;
+    }
+
+    .saicf-pre-chat-header h3 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 6px 0;
+    }
+
+    .saicf-pre-chat-header p {
+      font-size: 14px;
+      color: #666;
+      margin: 0;
+    }
+
+    .saicf-pre-chat-fields {
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .saicf-pre-chat-field {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+    }
+
+    .saicf-pre-chat-field label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 5px;
+      text-transform: capitalize;
+    }
+
+    .saicf-pre-chat-field input {
+      padding: 11px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .saicf-pre-chat-field input:focus {
+      border-color: currentColor;
+    }
+
+    .saicf-pre-chat-field input:disabled {
+      background-color: #f5f5f5;
+      cursor: not-allowed;
+    }
+
+    .saicf-pre-chat-field input::placeholder {
+      color: #999;
+    }
+
+    .saicf-pre-chat-submit {
+      background-color: #5616ea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 140px;
+      font-family: inherit;
+    }
+
+    .saicf-pre-chat-submit:hover:not(:disabled) {
+      background-color: #4512c4;
+      transform: translateY(-1px);
+    }
+
+    .saicf-pre-chat-submit:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .saicf-pre-chat-submit .saicf-btn-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: saicf-spin 0.8s linear infinite;
+    }
+
+    @media (max-width: 768px) {
+      .saicf-pre-chat-container {
+        padding: 24px 20px;
+      }
+
+      .saicf-pre-chat-icon {
+        width: 40px;
+        height: 40px;
+      }
+
+      .saicf-pre-chat-header h3 {
+        font-size: 18px;
+      }
+
+      .saicf-pre-chat-fields {
+        max-width: 100%;
+      }
+    }
   `;
   shadowRoot.appendChild(styleTag);
 
@@ -859,6 +1024,12 @@ async function initializeChatWidget() {
 
   let widgetConfig;
   let promotingText = 'This website is powered by smart AI chatbots from Ultimo Bots.';
+  let preChatFields = [];
+  let requirePreChat = false;
+  const PRE_CHAT_KEY = `saicf-prechat-completed-${botId}`;
+  let preChatCompleted = localStorage.getItem(PRE_CHAT_KEY) === '1';
+  const startTime = Date.now();
+
   try {
     const hostPageUrl = encodeURIComponent(window.location.href);
 
@@ -872,6 +1043,45 @@ async function initializeChatWidget() {
     }
     widgetConfig = await res.json();
     promotingText = widgetConfig.promoting_text ?? promotingText;
+
+    // Check for pre-chat requirement
+    requirePreChat = widgetConfig.require_pre_chat === true;
+    let requiredFieldIds = [];
+    try {
+      requiredFieldIds = typeof widgetConfig.pre_chat_required_fields === 'string'
+        ? JSON.parse(widgetConfig.pre_chat_required_fields)
+        : widgetConfig.pre_chat_required_fields || [];
+    } catch {
+      requiredFieldIds = [];
+    }
+
+    if (requirePreChat && requiredFieldIds.length > 0) {
+      // Fetch warm lead parameters to get field details
+      try {
+        const warmLeadRes = await fetch(
+          `https://portal.ultimo-bots.com/api/warm_lead_function/${botId}`,
+          { cache: 'no-store' }
+        );
+        if (warmLeadRes.ok) {
+          const warmLeadData = await warmLeadRes.json();
+          const allParams = warmLeadData.bot_function_parameters || [];
+
+          // Filter to only the required fields
+          preChatFields = allParams.filter(p => requiredFieldIds.includes(p.id));
+
+          if (preChatFields.length === 0) {
+            requirePreChat = false;
+          }
+        } else {
+          requirePreChat = false;
+        }
+      } catch (err) {
+        console.error('Error fetching warm lead parameters:', err);
+        requirePreChat = false;
+      }
+    } else {
+      requirePreChat = false;
+    }
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
     addUltimoBacklink(promotingText, false);
@@ -1010,8 +1220,24 @@ async function initializeChatWidget() {
 
   chatWindow.innerHTML = `
     ${headerHTML}
-    <div class="saicf-chat-body"></div>
-    <div class="saicf-chat-footer">
+    <div class="saicf-config-loading">
+      <svg class="saicf-config-spinner" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor">
+        <path d="M304 48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zm0 416a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM48 304a48 48 0 1 0 0-96 48 48 0 1 0 0 96zm464-48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM142.9 437A48 48 0 1 0 75 369.1 48 48 0 1 0 142.9 437zm0-294.2A48 48 0 1 0 75 75a48 48 0 1 0 67.9 67.9zM369.1 437A48 48 0 1 0 437 369.1 48 48 0 1 0 369.1 437z"/>
+      </svg>
+    </div>
+    <div class="saicf-pre-chat-container hidden">
+      <div class="saicf-pre-chat-header">
+        <svg class="saicf-pre-chat-icon" viewBox="0 0 640 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M208 352c114.9 0 208-78.8 208-176S322.9 0 208 0S0 78.8 0 176c0 38.6 14.7 74.3 39.6 103.4c-3.5 9.4-8.7 17.7-14.2 24.7c-4.8 6.2-9.7 11-13.3 14.3c-1.8 1.6-3.3 2.9-4.3 3.7c-.5 .4-.9 .7-1.1 .8l-.2 .2 0 0 0 0C1 327.2-1.4 334.4 .8 340.9S9.1 352 16 352c21.8 0 43.8-5.6 62.1-12.5c9.2-3.5 17.8-7.4 25.3-11.4C134.1 343.3 169.8 352 208 352zM448 176c0 112.3-99.1 196.9-216.5 207C255.8 457.4 336.4 512 432 512c38.2 0 73.9-8.7 104.7-23.9c7.5 4 16 7.9 25.2 11.4c18.3 6.9 40.3 12.5 62.1 12.5c6.9 0 13.1-4.5 15.2-11.1c2.1-6.6-.2-13.8-5.8-17.9l0 0 0 0-.2-.2c-.2-.2-.6-.4-1.1-.8c-1-.8-2.5-2-4.3-3.7c-3.6-3.3-8.5-8.1-13.3-14.3c-5.5-7-10.7-15.4-14.2-24.7c24.9-29 39.6-64.7 39.6-103.4c0-92.8-84.9-168.9-192.6-175.5c.4 5.1 .6 10.3 .6 15.5z"/>
+        </svg>
+        <h3>Before we start chatting</h3>
+        <p>Please provide your details to continue</p>
+      </div>
+      <div class="saicf-pre-chat-fields"></div>
+      <button class="saicf-pre-chat-submit" disabled>Start Chat</button>
+    </div>
+    <div class="saicf-chat-body hidden"></div>
+    <div class="saicf-chat-footer hidden">
       <div class="saicf-predefined-container hidden"></div>
       ${poweredByHTML}
       <div class="saicf-input-send-container">
@@ -1076,11 +1302,14 @@ async function initializeChatWidget() {
     popUpContainer.appendChild(msgEl);
 
     msgEl.addEventListener('click', () => {
-      ensureMarked().then(() => {
-        if (chatBody.childElementCount === 0) {
-          welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
-        }
-      });
+      // Only show welcome messages if pre-chat is completed or not required
+      if (!requirePreChat || preChatCompleted) {
+        ensureMarked().then(() => {
+          if (chatBody.childElementCount === 0) {
+            welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+          }
+        });
+      }
       chatWindow.classList.remove('hidden');
       forceReflow(chatWindow);
       chatWindow.classList.add('show');
@@ -1123,17 +1352,157 @@ async function initializeChatWidget() {
     .saicf-loading-dots div {
       background-color: ${themeColor} !important;
     }
+    .saicf-config-spinner {
+      color: ${themeColor};
+    }
+    .saicf-pre-chat-submit {
+      background-color: ${themeColor} !important;
+    }
+    .saicf-pre-chat-submit:hover:not(:disabled) {
+      background-color: ${hoverColor} !important;
+    }
+    .saicf-pre-chat-icon {
+      fill: ${themeColor};
+    }
+    .saicf-pre-chat-field input:focus {
+      border-color: ${themeColor};
+      box-shadow: 0 0 0 3px ${themeColor}22;
+    }
   `;
   shadowRoot.appendChild(dynamicStyleEl);
 
   const closeChatBtn   = chatWindow.querySelector('.saicf-close-btn');
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
+  const chatFooter     = chatWindow.querySelector('.saicf-chat-footer');
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer textarea');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
   const ellipsisBtn    = chatWindow.querySelector('.saicf-ellipsis-btn');
   const actionsWrap    = chatWindow.querySelector('.saicf-header-actions');
   const menu           = chatWindow.querySelector('.saicf-menu');
   const clearBtn       = chatWindow.querySelector('.saicf-menu-item--clear');
+  const configLoading  = chatWindow.querySelector('.saicf-config-loading');
+  const preChatContainer = chatWindow.querySelector('.saicf-pre-chat-container');
+  const preChatFieldsContainer = chatWindow.querySelector('.saicf-pre-chat-fields');
+  const preChatSubmitBtn = chatWindow.querySelector('.saicf-pre-chat-submit');
+
+  // Pre-chat form state
+  const preChatFormValues = {};
+
+  // Function to render pre-chat form fields
+  function renderPreChatFields() {
+    preChatFieldsContainer.innerHTML = '';
+
+    preChatFields.forEach(field => {
+      const fieldWrapper = document.createElement('div');
+      fieldWrapper.className = 'saicf-pre-chat-field';
+
+      const label = document.createElement('label');
+      label.textContent = field.user_display || field.name;
+      label.setAttribute('for', `prechat-field-${field.id}`);
+
+      const input = document.createElement('input');
+      input.type = field.name.toLowerCase().includes('email') ? 'email' : 'text';
+      input.id = `prechat-field-${field.id}`;
+      input.placeholder = `Enter your ${(field.user_display || field.name).toLowerCase()}`;
+      input.required = true;
+
+      preChatFormValues[field.id] = '';
+
+      input.addEventListener('input', (e) => {
+        preChatFormValues[field.id] = e.target.value;
+        validatePreChatForm();
+      });
+
+      fieldWrapper.appendChild(label);
+      fieldWrapper.appendChild(input);
+      preChatFieldsContainer.appendChild(fieldWrapper);
+    });
+  }
+
+  // Function to validate pre-chat form
+  function validatePreChatForm() {
+    const allFilled = preChatFields.every(field => {
+      const value = preChatFormValues[field.id];
+      return value && value.trim() !== '';
+    });
+    preChatSubmitBtn.disabled = !allFilled;
+  }
+
+  // Function to submit pre-chat form
+  async function submitPreChatForm() {
+    preChatSubmitBtn.disabled = true;
+    preChatSubmitBtn.textContent = 'Submitting...';
+
+    try {
+      // Build params object matching chatModal.js format: {fieldName: value}
+      const params = {};
+      preChatFields.forEach(field => {
+        params[field.name] = preChatFormValues[field.id];
+      });
+
+      const response = await fetch('https://portal.ultimo-bots.com/api/leads/pre_chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bot_id: botId,
+          session_id: sessionId,
+          params: params
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit pre-chat form');
+      }
+
+      preChatCompleted = true;
+      localStorage.setItem(PRE_CHAT_KEY, '1');
+
+      // Transition to chat view
+      preChatContainer.classList.add('hidden');
+      chatBody.classList.remove('hidden');
+      chatFooter.classList.remove('hidden');
+
+      // Load chat history or show welcome messages
+      if (chatBody.childElementCount === 0) {
+        await loadChatHistory();
+        if (chatBody.childElementCount === 0) {
+          await ensureMarked();
+          welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+        }
+      }
+    } catch (err) {
+      console.error('Error submitting pre-chat form:', err);
+      preChatSubmitBtn.textContent = 'Start Chat';
+      preChatSubmitBtn.disabled = false;
+    }
+  }
+
+  // Pre-chat submit handler
+  preChatSubmitBtn.addEventListener('click', () => {
+    submitPreChatForm();
+  });
+
+  // Hide loading spinner and show appropriate view (with 200ms minimum)
+  function initializeWidgetView() {
+    const elapsed = Date.now() - startTime;
+    const minDelay = 200;
+    const remainingDelay = Math.max(0, minDelay - elapsed);
+
+    setTimeout(() => {
+      configLoading.classList.add('hidden');
+
+      if (requirePreChat && !preChatCompleted) {
+        renderPreChatFields();
+        preChatContainer.classList.remove('hidden');
+      } else {
+        chatBody.classList.remove('hidden');
+        chatFooter.classList.remove('hidden');
+      }
+    }, remainingDelay);
+  }
+
+  // Initialize the widget view
+  initializeWidgetView();
 
 function toggleMenu(open) {
   const willOpen = typeof open === 'boolean' ? open : !menu.classList.contains('is-open');
@@ -1257,11 +1626,14 @@ function toggleMenu(open) {
   let streamingBotBubble = null;
 
   chatWidgetIcon.addEventListener('click', async () => {
-    if (chatBody.childElementCount === 0) {
-      await loadChatHistory();
+    // Only load chat history if pre-chat is completed or not required
+    if (!requirePreChat || preChatCompleted) {
       if (chatBody.childElementCount === 0) {
-        await ensureMarked();
-        welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+        await loadChatHistory();
+        if (chatBody.childElementCount === 0) {
+          await ensureMarked();
+          welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+        }
       }
     }
     chatWindow.classList.remove('hidden');
