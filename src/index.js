@@ -331,6 +331,13 @@ async function initializeChatWidget() {
     .saicf-close-chat-widget-icon:hover {
       transform: scale(1.2);
     }
+    .saicf-chat-body-wrapper {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
     .saicf-chat-body {
       flex: 1;
       padding: 8px;
@@ -339,6 +346,38 @@ async function initializeChatWidget() {
       display: flex;
       flex-direction: column;
       background-color: white;
+      position: relative;
+    }
+    .saicf-scroll-to-bottom-btn {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid #e0e0e0;
+      background: #fff;
+      color: #555;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, background-color 0.2s;
+      padding: 0;
+      margin: 0;
+      outline: none;
+    }
+    .saicf-scroll-to-bottom-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .saicf-scroll-to-bottom-btn:hover {
+      background-color: #f5f5f5;
     }
     .saicf-chat-footer {
       display: flex;
@@ -1305,7 +1344,7 @@ async function initializeChatWidget() {
       // Only show welcome messages if pre-chat is completed or not required
       if (!requirePreChat || preChatCompleted) {
         ensureMarked().then(() => {
-          if (chatBody.childElementCount === 0) {
+          if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
             welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
           }
         });
@@ -1374,6 +1413,42 @@ async function initializeChatWidget() {
   const closeChatBtn   = chatWindow.querySelector('.saicf-close-btn');
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
   const chatFooter     = chatWindow.querySelector('.saicf-chat-footer');
+
+  // Wrap chatBody for scroll-down button positioning
+  const chatBodyWrapper = document.createElement('div');
+  chatBodyWrapper.className = 'saicf-chat-body-wrapper';
+  chatBody.parentElement.insertBefore(chatBodyWrapper, chatBody);
+  chatBodyWrapper.appendChild(chatBody);
+
+  // Create spacer + sentinel elements for scroll positioning
+  const bottomSpacerEl = document.createElement('div');
+  bottomSpacerEl.style.flexShrink = '0';
+  chatBody.appendChild(bottomSpacerEl);
+
+  const messagesEndEl = document.createElement('div');
+  chatBody.appendChild(messagesEndEl);
+
+  // Create scroll-down button
+  const scrollDownBtn = document.createElement('button');
+  scrollDownBtn.className = 'saicf-scroll-to-bottom-btn';
+  scrollDownBtn.setAttribute('aria-label', 'Scroll to latest');
+  scrollDownBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" width="14" height="14"><path d="M169.4 470.6c12.5 12.5 32.8 12.5 45.3 0l160-160c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 370.8V64c0-17.7-14.3-32-32-32s-32 14.3-32 32v306.7L54.6 265.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160z" fill="currentColor"/></svg>';
+  scrollDownBtn.addEventListener('click', () => {
+    // Recalculate spacer, then smooth-scroll to the anchor position.
+    userScrolledAway = false;
+    programmaticScroll = true;
+    recalcSpacer();
+    const allUserMsgs = chatBody.querySelectorAll('.saicf-message-row.user');
+    const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
+    if (spacerActive && lastUserMsg) {
+      smoothScrollTarget = lastUserMsg.offsetTop - TOP_MARGIN;
+    } else {
+      smoothScrollTarget = chatBody.scrollHeight - chatBody.clientHeight;
+    }
+    chatBody.scrollTo({ top: smoothScrollTarget, behavior: 'smooth' });
+    scrollDownBtn.classList.remove('visible');
+  });
+  chatBodyWrapper.appendChild(scrollDownBtn);
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer textarea');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
   const ellipsisBtn    = chatWindow.querySelector('.saicf-ellipsis-btn');
@@ -1463,9 +1538,9 @@ async function initializeChatWidget() {
       chatFooter.classList.remove('hidden');
 
       // Load chat history or show welcome messages
-      if (chatBody.childElementCount === 0) {
+      if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
         await loadChatHistory();
-        if (chatBody.childElementCount === 0) {
+        if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
           await ensureMarked();
           welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
         }
@@ -1542,6 +1617,14 @@ function toggleMenu(open) {
 
     chatBody.innerHTML = '';
 
+    // Re-add spacer elements after clearing
+    chatBody.appendChild(bottomSpacerEl);
+    chatBody.appendChild(messagesEndEl);
+    bottomSpacerEl.style.height = '0px';
+    spacerActive = false;
+    programmaticScroll = false;
+    pendingUserScroll = false;
+
     const loadingRow = chatBody.querySelector('.saicf-loading-row');
     if (loadingRow) {
       loadingRow.remove();
@@ -1566,6 +1649,153 @@ function toggleMenu(open) {
   };
 
   let isBusy = false;
+  let pendingUserScroll = false;
+  let spacerActive = false;
+  let programmaticScroll = false;
+  let isStreamingState = false;
+  let userScrolledAway = false;
+  let ignoreScrollEvents = false;
+  let smoothScrollTarget = null; // store target so completion check is exact
+  const TOP_MARGIN = 6;
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
+  // Recalculate spacer so user message stays at top.
+  // Key insight: lastUserMsg.offsetTop is CONSTANT during streaming
+  // (only content below it changes). So the target scrollTop is always
+  // lastUserMsg.offsetTop - TOP_MARGIN. Setting scrollTop to a value
+  // it already holds is a no-op (no event, no jitter).
+  function recalcSpacer() {
+    if (!bottomSpacerEl || !chatBody) return 0;
+    const allUserMsgs = chatBody.querySelectorAll('.saicf-message-row.user');
+    const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
+    if (!lastUserMsg) return 0;
+
+    const containerH = chatBody.clientHeight;
+    const msgOffsetTop = lastUserMsg.offsetTop;  // constant during streaming
+    const naturalContentH = bottomSpacerEl.offsetTop;
+    const contentBelowUserMsg = naturalContentH - msgOffsetTop;
+    const neededSpacer = Math.max(0, containerH - contentBelowUserMsg - TOP_MARGIN);
+    bottomSpacerEl.style.height = neededSpacer + 'px';
+    spacerActive = neededSpacer > 0;
+
+    // Anchor scroll so user msg stays at TOP_MARGIN from viewport top.
+    // msgOffsetTop is constant during streaming, so when already correct
+    // chatBody.scrollTop === target and the assignment is a true no-op.
+    // Skip when: user scrolled away, or desktop smooth scroll in progress.
+    if (spacerActive && !userScrolledAway && !programmaticScroll) {
+      const target = msgOffsetTop - TOP_MARGIN;
+      if (Math.abs(chatBody.scrollTop - target) > 1) {
+        ignoreScrollEvents = true;
+        chatBody.scrollTop = target;
+        requestAnimationFrame(() => { ignoreScrollEvents = false; });
+      }
+    }
+
+    return neededSpacer;
+  }
+
+  // Position user message at top after sending.
+  function doPositioning() {
+    if (!chatBody || !pendingUserScroll) return;
+    pendingUserScroll = false;
+
+    // Reset spacer for fresh measurement
+    bottomSpacerEl.style.height = '0px';
+    spacerActive = false;
+
+    // Size the spacer. Set programmaticScroll FIRST so recalcSpacer
+    // skips its instant anchor — we want a smooth scroll instead.
+    programmaticScroll = true;
+    recalcSpacer();
+
+    if (spacerActive) {
+      // Scroll to the exact anchor value (msgOffsetTop - TOP_MARGIN),
+      // not scrollHeight - clientHeight, so there's zero discrepancy
+      // when the smooth scroll completes.
+      const allUserMsgs = chatBody.querySelectorAll('.saicf-message-row.user');
+      const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
+      smoothScrollTarget = lastUserMsg ? lastUserMsg.offsetTop - TOP_MARGIN : 0;
+      chatBody.scrollTo({ top: smoothScrollTarget, behavior: 'smooth' });
+    } else {
+      programmaticScroll = false;
+    }
+  }
+
+  // Track scroll-down button visibility
+  function updateScrollDownVisibility() {
+    if (!chatBody) return;
+    // Hide during smooth scroll animation
+    if (programmaticScroll) {
+      scrollDownBtn.classList.remove('visible');
+      return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = chatBody;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 40;
+    const shouldShow = !isAtBottom && scrollHeight > clientHeight;
+    scrollDownBtn.classList.toggle('visible', shouldShow);
+  }
+
+  // Scroll event handler
+  chatBody.addEventListener('scroll', function () {
+    if (ignoreScrollEvents) return;
+    if (programmaticScroll) {
+      // Detect smooth scroll completion: arrived at target or at bottom
+      const atTarget = smoothScrollTarget !== null && Math.abs(chatBody.scrollTop - smoothScrollTarget) < 2;
+      const atBottom = chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 2;
+      if (atTarget || atBottom) {
+        programmaticScroll = false;
+        smoothScrollTarget = null;
+      }
+      return;
+    }
+    updateScrollDownVisibility();
+  });
+
+  // Detect user-initiated scrolls via touch events (mobile) or
+  // wheel/mousedown (desktop). This is reliable on iOS where scroll
+  // events from programmatic scrollTop, keyboard dismiss, and resize
+  // are indistinguishable from user scrolls.
+  if (isMobile) {
+    let userTouching = false;
+    chatBody.addEventListener('touchstart', () => { userTouching = true; }, { passive: true });
+    chatBody.addEventListener('touchend', () => {
+      // Defer so the final scroll events from the touch are processed
+      setTimeout(() => { userTouching = false; }, 100);
+    }, { passive: true });
+    chatBody.addEventListener('scroll', function () {
+      if (userTouching && isStreamingState && !userScrolledAway) {
+        userScrolledAway = true;
+        updateScrollDownVisibility();
+      }
+    }, { passive: true });
+  } else {
+    // Desktop: wheel and mousedown are reliable indicators
+    chatBody.addEventListener('wheel', function () {
+      if (isStreamingState && !userScrolledAway) {
+        userScrolledAway = true;
+        updateScrollDownVisibility();
+      }
+    }, { passive: true });
+    chatBody.addEventListener('mousedown', function () {
+      if (isStreamingState && !userScrolledAway) {
+        userScrolledAway = true;
+        updateScrollDownVisibility();
+      }
+    });
+  }
+
+  // Watch for container resizes (e.g. mobile keyboard dismiss changes
+  // clientHeight). Re-size the spacer so the user message stays pinned.
+  let lastBodyHeight = chatBody.clientHeight;
+  const bodyResizeObserver = new ResizeObserver(() => {
+    const newH = chatBody.clientHeight;
+    if (newH === lastBodyHeight) return;
+    lastBodyHeight = newH;
+    if (spacerActive) {
+      recalcSpacer();
+    }
+  });
+  bodyResizeObserver.observe(chatBody);
 
   function getPredefinedChips() {
     return Array.from(chatWindow.querySelectorAll('.saicf-predefined-question'));
@@ -1628,9 +1858,9 @@ function toggleMenu(open) {
   chatWidgetIcon.addEventListener('click', async () => {
     // Only load chat history if pre-chat is completed or not required
     if (!requirePreChat || preChatCompleted) {
-      if (chatBody.childElementCount === 0) {
+      if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
         await loadChatHistory();
-        if (chatBody.childElementCount === 0) {
+        if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
           await ensureMarked();
           welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
         }
@@ -1743,12 +1973,20 @@ function toggleMenu(open) {
     const message = chatInput.value.trim();
     if (!message) return;
 
-    appendMessage(message, 'user');
+    // Set up scroll positioning flags
+    pendingUserScroll = true;
+    isStreamingState = true;
+    userScrolledAway = false;
+
+    appendMessage(message, 'user', { skipScroll: true });
     chatInput.value = '';
     resizeTextarea(chatInput);
 
     setBusy(true);
     setLoading(true);
+
+    // Trigger positioning after DOM is updated
+    doPositioning();
 
     let currentBotMessage = '';
     resetStreamingBotMessage();
@@ -1761,9 +1999,11 @@ function toggleMenu(open) {
     const finish = () => {
       setLoading(false);
       setBusy(false);
+      isStreamingState = false;
       saveChatHistory();
       resetStreamingBotMessage();
-      scrollToBottom();
+      recalcSpacer();
+      updateScrollDownVisibility();
     };
 
     // Error messages for different error types
@@ -1784,6 +2024,28 @@ function toggleMenu(open) {
       es.onmessage = ({ data: chunk }) => {
         if (chunk === 'end of response') return;
         if (firstChunk) {
+          // If smooth scroll is still animating, snap to final position
+          // BEFORE any DOM mutations. Removing loading dots drops
+          // scrollHeight, causing the browser to clamp scrollTop
+          // synchronously — disrupting the animation and shifting the
+          // user message down. By snapping first, we own the scrollTop
+          // value and recalcSpacer can re-anchor correctly.
+          if (programmaticScroll && !userScrolledAway) {
+            programmaticScroll = false;
+            smoothScrollTarget = null;
+            const allUserMsgs = chatBody.querySelectorAll('.saicf-message-row.user');
+            const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
+            if (lastUserMsg) {
+              ignoreScrollEvents = true;
+              chatBody.scrollTop = lastUserMsg.offsetTop - TOP_MARGIN;
+              requestAnimationFrame(() => { ignoreScrollEvents = false; });
+            }
+          } else if (programmaticScroll) {
+            // User scrolled away — just cancel the smooth scroll,
+            // don't snap them back to the user message.
+            programmaticScroll = false;
+            smoothScrollTarget = null;
+          }
           setLoading(false);
           firstChunk = false;
         }
@@ -1883,7 +2145,7 @@ function toggleMenu(open) {
 
   function appendMessage(text, sender, options = {}) {
     const row = createMessageRow(text, sender);
-    chatBody.appendChild(row);
+    chatBody.insertBefore(row, bottomSpacerEl);
     if (!options.skipScroll) {
       scrollToBottom();
     }
@@ -1916,7 +2178,13 @@ function toggleMenu(open) {
     } else {
       bubble.textContent = text;
     }
-    scrollToBottom();
+    // Shrink spacer as bot response grows + re-anchor scroll.
+    // recalcSpacer is a no-op when scrollTop is already correct
+    // (lastUserMsg.offsetTop is constant), so no jitter.
+    if (spacerActive && !programmaticScroll && !userScrolledAway) {
+      recalcSpacer();
+    }
+    updateScrollDownVisibility();
   }
 
   function scrollToBottom() {
@@ -1930,10 +2198,12 @@ function toggleMenu(open) {
       const row = document.createElement('div');
       row.className = 'saicf-loading-row';
       row.innerHTML = '<div class="saicf-loading-dots"><div></div><div></div><div></div></div>';
-      chatBody.appendChild(row);
-      scrollToBottom();
+      chatBody.insertBefore(row, bottomSpacerEl);
+      // Only auto-scroll if doPositioning won't handle it
+      if (!pendingUserScroll) scrollToBottom();
     } else if (existing) {
       existing.remove();
+      if (spacerActive) recalcSpacer();
     }
   }
 
@@ -1986,7 +2256,7 @@ function toggleMenu(open) {
         }
 
         row.appendChild(bubble);
-        chatBody.appendChild(row);
+        chatBody.insertBefore(row, bottomSpacerEl);
       });
 
       scrollToBottom();
