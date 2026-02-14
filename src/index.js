@@ -331,13 +331,6 @@ async function initializeChatWidget() {
     .saicf-close-chat-widget-icon:hover {
       transform: scale(1.2);
     }
-    .saicf-chat-body-wrapper {
-      position: relative;
-      flex: 1 1 auto;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
     .saicf-chat-body {
       flex: 1;
       padding: 8px;
@@ -346,38 +339,6 @@ async function initializeChatWidget() {
       display: flex;
       flex-direction: column;
       background-color: white;
-      position: relative;
-    }
-    .saicf-scroll-to-bottom-btn {
-      position: absolute;
-      bottom: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 1px solid #e0e0e0;
-      background: #fff;
-      color: #555;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      z-index: 10;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease, background-color 0.2s;
-      padding: 0;
-      margin: 0;
-      outline: none;
-    }
-    .saicf-scroll-to-bottom-btn.visible {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    .saicf-scroll-to-bottom-btn:hover {
-      background-color: #f5f5f5;
     }
     .saicf-chat-footer {
       display: flex;
@@ -1344,7 +1305,7 @@ async function initializeChatWidget() {
       // Only show welcome messages if pre-chat is completed or not required
       if (!requirePreChat || preChatCompleted) {
         ensureMarked().then(() => {
-          if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
+          if (chatBody.childElementCount === 0) {
             welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
           }
         });
@@ -1413,35 +1374,6 @@ async function initializeChatWidget() {
   const closeChatBtn   = chatWindow.querySelector('.saicf-close-btn');
   const chatBody       = chatWindow.querySelector('.saicf-chat-body');
   const chatFooter     = chatWindow.querySelector('.saicf-chat-footer');
-
-  // Wrap chatBody for scroll-down button positioning
-  const chatBodyWrapper = document.createElement('div');
-  chatBodyWrapper.className = 'saicf-chat-body-wrapper';
-  chatBody.parentElement.insertBefore(chatBodyWrapper, chatBody);
-  chatBodyWrapper.appendChild(chatBody);
-
-  // Create spacer + sentinel elements for scroll positioning
-  const bottomSpacerEl = document.createElement('div');
-  bottomSpacerEl.style.flexShrink = '0';
-  chatBody.appendChild(bottomSpacerEl);
-
-  const messagesEndEl = document.createElement('div');
-  chatBody.appendChild(messagesEndEl);
-
-  // Create scroll-down button
-  const scrollDownBtn = document.createElement('button');
-  scrollDownBtn.className = 'saicf-scroll-to-bottom-btn';
-  scrollDownBtn.setAttribute('aria-label', 'Scroll to latest');
-  scrollDownBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" width="14" height="14"><path d="M169.4 470.6c12.5 12.5 32.8 12.5 45.3 0l160-160c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 370.8V64c0-17.7-14.3-32-32-32s-32 14.3-32 32v306.7L54.6 265.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160z" fill="currentColor"/></svg>';
-  scrollDownBtn.addEventListener('click', () => {
-    // Recalculate spacer so user message stays positioned at top,
-    // then smooth-scroll to the (spacer-aware) bottom.
-    recalcSpacer();
-    programmaticScroll = true;
-    chatBody.scrollTo({ top: chatBody.scrollHeight - chatBody.clientHeight, behavior: 'smooth' });
-    scrollDownBtn.classList.remove('visible');
-  });
-  chatBodyWrapper.appendChild(scrollDownBtn);
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer textarea');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
   const ellipsisBtn    = chatWindow.querySelector('.saicf-ellipsis-btn');
@@ -1531,9 +1463,9 @@ async function initializeChatWidget() {
       chatFooter.classList.remove('hidden');
 
       // Load chat history or show welcome messages
-      if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
+      if (chatBody.childElementCount === 0) {
         await loadChatHistory();
-        if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
+        if (chatBody.childElementCount === 0) {
           await ensureMarked();
           welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
         }
@@ -1610,15 +1542,6 @@ function toggleMenu(open) {
 
     chatBody.innerHTML = '';
 
-    // Re-add spacer elements after clearing
-    chatBody.appendChild(bottomSpacerEl);
-    chatBody.appendChild(messagesEndEl);
-    bottomSpacerEl.style.height = '0px';
-    spacerActive = false;
-    scrollAttemptsLeft = 0;
-    programmaticScroll = false;
-    pendingUserScroll = false;
-
     const loadingRow = chatBody.querySelector('.saicf-loading-row');
     if (loadingRow) {
       loadingRow.remove();
@@ -1643,101 +1566,6 @@ function toggleMenu(open) {
   };
 
   let isBusy = false;
-  let pendingUserScroll = false;
-  let scrollAttemptsLeft = 0;
-  let spacerActive = false;
-  let programmaticScroll = false;
-  let isStreamingState = false;
-  const TOP_MARGIN = 16; // breathing room above user message when positioned at top
-
-  // Recalculate spacer so user message stays at top.
-  function recalcSpacer() {
-    if (!bottomSpacerEl || !chatBody) return 0;
-    const container = chatBody;
-    const allUserMsgs = container.querySelectorAll('.saicf-message-row.user');
-    const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
-    if (!lastUserMsg) return 0;
-
-    const containerH = container.clientHeight;
-    const msgOffsetTop = lastUserMsg.offsetTop;
-    const naturalContentH = bottomSpacerEl.offsetTop;
-    const contentBelowUserMsg = naturalContentH - msgOffsetTop;
-    const neededSpacer = Math.max(0, containerH - contentBelowUserMsg - TOP_MARGIN);
-    bottomSpacerEl.style.height = neededSpacer + 'px';
-    spacerActive = neededSpacer > 0;
-    return neededSpacer;
-  }
-
-  // Position user message at top after sending.
-  function doPositioning() {
-    if (!chatBody) return;
-
-    if (pendingUserScroll) {
-      pendingUserScroll = false;
-      bottomSpacerEl.style.height = '0px';
-      spacerActive = false;
-    }
-
-    if (scrollAttemptsLeft > 0) {
-      scrollAttemptsLeft--;
-
-      const container = chatBody;
-      const allUserMsgs = container.querySelectorAll('.saicf-message-row.user');
-      const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
-      if (!lastUserMsg) return;
-
-      const containerH = container.clientHeight;
-      const msgOffsetTop = lastUserMsg.offsetTop;
-      const naturalContentH = bottomSpacerEl.offsetTop;
-      const contentBelowMsg = naturalContentH - msgOffsetTop;
-      const need = Math.max(0, containerH - contentBelowMsg - TOP_MARGIN);
-      bottomSpacerEl.style.height = need + 'px';
-      spacerActive = need > 0;
-
-      requestAnimationFrame(() => {
-        if (!chatBody) return;
-        const target = chatBody.scrollHeight - chatBody.clientHeight;
-        if (target > 0) {
-          programmaticScroll = true;
-          chatBody.scrollTo({ top: target, behavior: 'smooth' });
-        }
-        if (scrollAttemptsLeft > 0) {
-          requestAnimationFrame(() => doPositioning());
-        }
-      });
-    }
-  }
-
-  // Track scroll-down button visibility
-  function updateScrollDownVisibility() {
-    if (!chatBody) return;
-    if (scrollAttemptsLeft > 0 || programmaticScroll) {
-      scrollDownBtn.classList.remove('visible');
-      return;
-    }
-    const { scrollTop, scrollHeight, clientHeight } = chatBody;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 40;
-    const shouldShow = !isAtBottom && scrollHeight > clientHeight;
-    scrollDownBtn.classList.toggle('visible', shouldShow);
-  }
-
-  // Scroll event handler
-  chatBody.addEventListener('scroll', function () {
-    if (programmaticScroll) {
-      if (chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 2) {
-        programmaticScroll = false;
-        // Catch up on any spacer shrinking skipped during the animation
-        if (spacerActive) {
-          recalcSpacer();
-        }
-      }
-      return;
-    }
-    if (scrollAttemptsLeft > 0) {
-      scrollAttemptsLeft = 0;
-    }
-    updateScrollDownVisibility();
-  });
 
   function getPredefinedChips() {
     return Array.from(chatWindow.querySelectorAll('.saicf-predefined-question'));
@@ -1800,9 +1628,9 @@ function toggleMenu(open) {
   chatWidgetIcon.addEventListener('click', async () => {
     // Only load chat history if pre-chat is completed or not required
     if (!requirePreChat || preChatCompleted) {
-      if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
+      if (chatBody.childElementCount === 0) {
         await loadChatHistory();
-        if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
+        if (chatBody.childElementCount === 0) {
           await ensureMarked();
           welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
         }
@@ -1915,20 +1743,12 @@ function toggleMenu(open) {
     const message = chatInput.value.trim();
     if (!message) return;
 
-    // Set up scroll positioning flags
-    pendingUserScroll = true;
-    scrollAttemptsLeft = 6;
-    isStreamingState = true;
-
-    appendMessage(message, 'user', { skipScroll: true });
+    appendMessage(message, 'user');
     chatInput.value = '';
     resizeTextarea(chatInput);
 
     setBusy(true);
     setLoading(true);
-
-    // Trigger positioning after DOM is updated
-    doPositioning();
 
     let currentBotMessage = '';
     resetStreamingBotMessage();
@@ -1941,11 +1761,9 @@ function toggleMenu(open) {
     const finish = () => {
       setLoading(false);
       setBusy(false);
-      isStreamingState = false;
       saveChatHistory();
       resetStreamingBotMessage();
-      recalcSpacer();
-      updateScrollDownVisibility();
+      scrollToBottom();
     };
 
     // Error messages for different error types
@@ -1971,14 +1789,6 @@ function toggleMenu(open) {
         }
         currentBotMessage += chunk.replace(/<newline>/g, '\n');
         updateStreamingBotMessage(currentBotMessage);
-
-        // DOM mutations (loading removal + bot bubble creation) cancel any
-        // in-progress smooth scroll, leaving scrollTop mid-way. Re-anchor.
-        if (programmaticScroll) {
-          chatBody.scrollTop = chatBody.scrollHeight - chatBody.clientHeight;
-          programmaticScroll = false;
-          if (spacerActive) recalcSpacer();
-        }
       };
 
       es.addEventListener('end', () => {
@@ -2073,7 +1883,7 @@ function toggleMenu(open) {
 
   function appendMessage(text, sender, options = {}) {
     const row = createMessageRow(text, sender);
-    chatBody.insertBefore(row, bottomSpacerEl);
+    chatBody.appendChild(row);
     if (!options.skipScroll) {
       scrollToBottom();
     }
@@ -2106,13 +1916,7 @@ function toggleMenu(open) {
     } else {
       bubble.textContent = text;
     }
-    // Silently shrink spacer as bot response grows (don't auto-scroll).
-    // Skip while a smooth scroll is still animating — changing spacer height
-    // mid-animation cancels the transition and causes visible jitter.
-    if (spacerActive && scrollAttemptsLeft <= 0 && !programmaticScroll) {
-      recalcSpacer();
-    }
-    updateScrollDownVisibility();
+    scrollToBottom();
   }
 
   function scrollToBottom() {
@@ -2126,15 +1930,10 @@ function toggleMenu(open) {
       const row = document.createElement('div');
       row.className = 'saicf-loading-row';
       row.innerHTML = '<div class="saicf-loading-dots"><div></div><div></div><div></div></div>';
-      chatBody.insertBefore(row, bottomSpacerEl);
-      if (scrollAttemptsLeft <= 0) {
-        scrollToBottom();
-      }
+      chatBody.appendChild(row);
+      scrollToBottom();
     } else if (existing) {
       existing.remove();
-      if (spacerActive && scrollAttemptsLeft <= 0 && !programmaticScroll) {
-        recalcSpacer();
-      }
     }
   }
 
@@ -2187,7 +1986,7 @@ function toggleMenu(open) {
         }
 
         row.appendChild(bubble);
-        chatBody.insertBefore(row, bottomSpacerEl);
+        chatBody.appendChild(row);
       });
 
       scrollToBottom();
