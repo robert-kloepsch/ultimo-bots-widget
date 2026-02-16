@@ -911,7 +911,8 @@ async function initializeChatWidget() {
       align-items: center;
       justify-content: flex-start;
       padding: 30px 24px;
-      flex: 1;
+      flex: 1 1 0%;
+      width: 100%;
       min-height: 0;
       text-align: center;
       background: #fff;
@@ -1352,6 +1353,7 @@ async function initializeChatWidget() {
       chatWindow.classList.remove('hidden');
       forceReflow(chatWindow);
       chatWindow.classList.add('show');
+      chatWidgetIcon.classList.add('hidden');
       chatOverlay.classList.remove('hidden');
 
       if (window.matchMedia('(max-width: 768px)').matches) {
@@ -1534,6 +1536,7 @@ async function initializeChatWidget() {
 
       // Transition to chat view
       preChatContainer.classList.add('hidden');
+      chatBodyWrapper.classList.remove('hidden');
       chatBody.classList.remove('hidden');
       chatFooter.classList.remove('hidden');
 
@@ -1568,6 +1571,7 @@ async function initializeChatWidget() {
 
       if (requirePreChat && !preChatCompleted) {
         renderPreChatFields();
+        chatBodyWrapper.classList.add('hidden');
         preChatContainer.classList.remove('hidden');
       } else {
         chatBody.classList.remove('hidden');
@@ -1869,6 +1873,7 @@ function toggleMenu(open) {
     chatWindow.classList.remove('hidden');
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
+    chatWidgetIcon.classList.add('hidden');
     chatOverlay.classList.remove('hidden');
     if (window.matchMedia('(max-width: 768px)').matches) {
       document.body.classList.add('no-scroll');
@@ -1954,6 +1959,7 @@ function toggleMenu(open) {
 
   function closeChat() {
     chatWindow.classList.remove('show');
+    chatWidgetIcon.classList.remove('hidden');
     chatOverlay.classList.add('hidden');
     if (window.matchMedia('(max-width: 768px)').matches) {
       document.body.classList.remove('no-scroll');
