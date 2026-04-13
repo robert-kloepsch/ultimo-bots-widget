@@ -140,6 +140,21 @@ async function initializeChatWidget() {
       }
     });
   let markedReady = typeof marked !== 'undefined';
+  let _linkTarget = '_self';
+
+  function applyMarkedLinkRenderer() {
+    if (typeof marked !== 'undefined' && marked.use) {
+      marked.use({
+        renderer: {
+          link(href, title, text) {
+            const titleAttr = title ? ` title="${title}"` : '';
+            const rel = _linkTarget === '_blank' ? ' rel="noopener noreferrer"' : '';
+            return `<a href="${href}" target="${_linkTarget}"${rel}${titleAttr}>${text}</a>`;
+          }
+        }
+      });
+    }
+  }
 
   async function ensureMarked() {
     if (markedReady) return;
@@ -150,6 +165,7 @@ async function initializeChatWidget() {
     mod.marked.setOptions({ gfm: true, breaks: true, headerIds: false });
     globalThis.marked = mod.marked;
     markedReady = true;
+    applyMarkedLinkRenderer();
   }
 
   const container = document.getElementById('chat-widget-container');
@@ -1083,6 +1099,12 @@ async function initializeChatWidget() {
     }
     widgetConfig = await res.json();
     promotingText = widgetConfig.promoting_text ?? promotingText;
+
+    // Link target behavior
+    if (widgetConfig.open_links_in_new_tab === true) {
+      _linkTarget = '_blank';
+    }
+    applyMarkedLinkRenderer();
 
     // Check for pre-chat requirement
     requirePreChat = widgetConfig.require_pre_chat === true;
