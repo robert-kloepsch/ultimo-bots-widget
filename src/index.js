@@ -146,10 +146,19 @@ async function initializeChatWidget() {
     if (typeof marked !== 'undefined' && marked.use) {
       marked.use({
         renderer: {
-          link(href, title, text) {
+          link(...args) {
+            let href, title, text;
+            if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+              // marked v12+ passes a single token object
+              ({ href, title, text } = args[0]);
+            } else {
+              // marked v11 passes positional args
+              [href, title, text] = args;
+            }
+            const displayText = text || title || 'Link';
             const titleAttr = title ? ` title="${title}"` : '';
             const rel = _linkTarget === '_blank' ? ' rel="noopener noreferrer"' : '';
-            return `<a href="${href}" target="${_linkTarget}"${rel}${titleAttr}>${text}</a>`;
+            return `<a href="${href}" target="${_linkTarget}"${rel}${titleAttr}>${displayText}</a>`;
           }
         }
       });
