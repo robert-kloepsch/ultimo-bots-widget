@@ -132,7 +132,7 @@ function addUltimoBacklink(promotingText, removePoweredBy) {
 }
 
 async function initializeChatWidget() {
-  ['http://192.168.1.5:5000', 'https://cdn.jsdelivr.net']
+  ['http://192.168.1.173:5000', 'https://cdn.jsdelivr.net']
     .forEach(h => {
       if (!document.querySelector(`link[rel="preconnect"][href="${h}"]`)) {
         const l = document.createElement('link');
@@ -1356,7 +1356,7 @@ async function initializeChatWidget() {
     const hostPageUrl = encodeURIComponent(window.location.href);
 
     const res = await fetch(
-      `http://192.168.1.5:5000/api/widget_configuration/${botId}?host_url=${hostPageUrl}`,
+      `http://192.168.1.173:5000/api/widget_configuration/${botId}?host_url=${hostPageUrl}`,
       { cache: 'no-store' }
     );
 
@@ -1387,7 +1387,7 @@ async function initializeChatWidget() {
       // Fetch warm lead parameters to get field details
       try {
         const warmLeadRes = await fetch(
-          `http://192.168.1.5:5000/api/warm_lead_function/${botId}`,
+          `http://192.168.1.173:5000/api/warm_lead_function/${botId}`,
           { cache: 'no-store' }
         );
         if (warmLeadRes.ok) {
@@ -1417,12 +1417,12 @@ async function initializeChatWidget() {
   }
 
   // Fetch live chat settings (non-blocking — widget works without it)
-  let liveSettings = { enabled: false, show_request_button: false, request_button_text: '' };
+  let liveSettings = { show_request_button: false, request_button_text: '' };
   let agentAvailable = false;
   try {
     const [liveRes, availRes] = await Promise.all([
-      fetch(`http://192.168.1.5:5000/api/live_chat_settings_public/${botId}`, { cache: 'no-store' }),
-      fetch(`http://192.168.1.5:5000/api/live/agent_available/${botId}`, { cache: 'no-store' }),
+      fetch(`http://192.168.1.173:5000/api/live_chat_settings_public/${botId}`, { cache: 'no-store' }),
+      fetch(`http://192.168.1.173:5000/api/live/agent_available/${botId}`, { cache: 'no-store' }),
     ]);
     if (liveRes.ok) {
       liveSettings = await liveRes.json();
@@ -1562,7 +1562,7 @@ async function initializeChatWidget() {
               </svg>
               Clear chat
             </button>
-            ${liveSettings.enabled && liveSettings.show_request_button && agentAvailable ? `
+            ${liveSettings.show_request_button && agentAvailable ? `
             <button class="saicf-menu-item saicf-menu-item--agent" role="menuitem">
               <svg viewBox="0 0 512 512" fill="currentColor">
                 <path d="M256 48C141.1 48 48 141.1 48 256c0 39.6 11.1 76.5 30.3 108L48 464l100-30.3c31.5 19.2 68.4 30.3 108 30.3 114.9 0 208-93.1 208-208S370.9 48 256 48z"/>
@@ -1860,7 +1860,7 @@ async function initializeChatWidget() {
         params[field.name] = preChatFormValues[field.id];
       });
 
-      const response = await fetch('http://192.168.1.5:5000/api/leads/pre_chat', {
+      const response = await fetch('http://192.168.1.173:5000/api/leads/pre_chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1981,13 +1981,13 @@ function toggleMenu(open) {
     if (waitingCancel) waitingCancel.closest('.saicf-system-notice')?.remove();
 
     // End old session in backend so it disappears from the portal
-    if (liveSettings.enabled) {
+    if (liveHeartbeatStarted) {
       try {
         const blob = new Blob(
           [JSON.stringify({ session_id: sessionId, bot_id: botId })],
           { type: 'application/json' }
         );
-        navigator.sendBeacon('http://192.168.1.5:5000/api/live/disconnect', blob);
+        navigator.sendBeacon('http://192.168.1.173:5000/api/live/disconnect', blob);
       } catch { /* non-fatal */ }
     }
 
@@ -2321,7 +2321,7 @@ function toggleMenu(open) {
 
     wsConnecting = true;
     try {
-      liveWs = new WebSocket('ws://192.168.1.5:5000/ws');
+      liveWs = new WebSocket('ws://192.168.1.173:5000/ws');
     } catch (err) {
       wsConnecting = false;
       console.error('WS constructor error:', err);
@@ -2409,6 +2409,14 @@ function toggleMenu(open) {
           setLiveSessionStatusFn('active');
           break;
         }
+        case 'live_agent_requested': {
+          // AI-tool-triggered request from the backend's `generate_response`.
+          // Mirror the menu-button UI: show the "Please wait / Cancel" notice.
+          if (liveSessionStatus !== 'agent_requested' && liveSessionStatus !== 'agent_joined') {
+            showWaitingForAgentNotice();
+          }
+          break;
+        }
         case 'typing_start': {
           showAgentTyping();
           break;
@@ -2457,7 +2465,7 @@ function toggleMenu(open) {
   }
 
   function scheduleWsReconnect() {
-    if (!liveSettings.enabled) return;
+    if (!liveSettings.show_request_button) return;
     if (!liveHeartbeatStarted) return; // no session yet
     if (wsReconnectTimer) return;
     wsReconnectTimer = setTimeout(() => {
@@ -2480,7 +2488,7 @@ function toggleMenu(open) {
     const sent = wsSend({ type: 'message_ack', session_id: sessionId, message_ids: messageIds });
     if (!sent) {
       // HTTP fallback when WS is closed
-      fetch(`http://192.168.1.5:5000/api/live/ack/${sessionId}`, {
+      fetch(`http://192.168.1.173:5000/api/live/ack/${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message_ids: messageIds }),
@@ -2612,12 +2620,17 @@ function toggleMenu(open) {
     requestAgentBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       toggleMenu(false);
-      if (agentRequestPending || liveSessionStatus === 'agent_joined') return;
+      // If an agent is currently joined, this button acts as "Disconnect Agent".
+      if (liveSessionStatus === 'agent_joined') {
+        showDisconnectAgentConfirm();
+        return;
+      }
+      if (agentRequestPending) return;
       requestAgentBtn.classList.add('is-disabled');
       agentRequestPending = true;
       try {
         // Check if any agent is currently online before requesting
-        const availRes = await fetch(`http://192.168.1.5:5000/api/live/agent_available/${botId}`);
+        const availRes = await fetch(`http://192.168.1.173:5000/api/live/agent_available/${botId}`);
         if (availRes.ok) {
           const availData = await availRes.json();
           if (!availData.available) {
@@ -2633,7 +2646,7 @@ function toggleMenu(open) {
           await sendHeartbeat();
           startHeartbeat();
         }
-        let res = await fetch('http://192.168.1.5:5000/api/live/request_agent', {
+        let res = await fetch('http://192.168.1.173:5000/api/live/request_agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId, bot_id: botId }),
@@ -2645,38 +2658,14 @@ function toggleMenu(open) {
           sessionId = generateSessionId();
           sessionStorage.setItem(`sessionId-${botId}`, sessionId);
           try { await sendHeartbeat(); } catch { /* non-fatal */ }
-          res = await fetch('http://192.168.1.5:5000/api/live/request_agent', {
+          res = await fetch('http://192.168.1.173:5000/api/live/request_agent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session_id: sessionId, bot_id: botId }),
           });
         }
         if (res.ok) {
-          liveSessionStatus = 'agent_requested';
-          requestAgentBtn.innerHTML = requestAgentBtn.querySelector('svg').outerHTML + ' Waiting for agent…';
-          appendSystemNotice('You requested a live agent. Please wait', {
-            waiting: true,
-            onCancel: async (notice) => {
-              try {
-                await fetch('http://192.168.1.5:5000/api/live/cancel_request', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ session_id: sessionId }),
-                });
-              } catch {}
-              notice.remove();
-              liveSessionStatus = 'active';
-              agentRequestPending = false;
-              stopAgentPolling();
-              if (requestAgentBtn) {
-                const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
-                requestAgentBtn.innerHTML = svgMarkup + ` ${liveSettings.request_button_text || 'Talk to a human'}`;
-                requestAgentBtn.classList.remove('is-disabled');
-              }
-              appendSystemNotice('Agent request cancelled.');
-            },
-          });
-          startAgentPolling();
+          showWaitingForAgentNotice();
         } else {
           requestAgentBtn.classList.remove('is-disabled');
           agentRequestPending = false;
@@ -2687,6 +2676,79 @@ function toggleMenu(open) {
         agentRequestPending = false;
       }
     });
+  }
+
+  // ── Live chat: Render "waiting for agent" UI (shared by menu-button click
+  // and AI-tool-triggered `live_agent_requested` WS event) ──
+  function showWaitingForAgentNotice() {
+    // Idempotent: if a waiting notice is already on screen, do nothing.
+    if (chatBody.querySelector('.saicf-cancel-request')) return;
+    liveSessionStatus = 'agent_requested';
+    agentRequestPending = true;
+    if (requestAgentBtn) {
+      const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+      requestAgentBtn.innerHTML = svgMarkup + ' Waiting for agent…';
+      requestAgentBtn.classList.add('is-disabled');
+    }
+    appendSystemNotice('You requested a live agent. Please wait', {
+      waiting: true,
+      onCancel: async (notice) => {
+        try {
+          await fetch('http://192.168.1.173:5000/api/live/cancel_request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+        } catch {}
+        notice.remove();
+        liveSessionStatus = 'active';
+        agentRequestPending = false;
+        stopAgentPolling();
+        if (requestAgentBtn) {
+          const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+          requestAgentBtn.innerHTML = svgMarkup + ` ${liveSettings.request_button_text || 'Talk to a human'}`;
+          requestAgentBtn.classList.remove('is-disabled');
+        }
+        appendSystemNotice('Agent request cancelled.');
+      },
+    });
+    startAgentPolling();
+  }
+
+  // ── Live chat: Confirm disconnecting from a joined agent. Reuses the same
+  // confirm modal styles as the clear-chat dialog. Only disconnects the live
+  // agent (session stays alive, chat history is kept). ──
+  function showDisconnectAgentConfirm() {
+    if (chatWindow.querySelector('.saicf-confirm-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'saicf-confirm-overlay';
+    overlay.innerHTML = `
+      <div class="saicf-confirm-box">
+        <p>Disconnect from the live agent? Your chat will be kept.</p>
+        <div class="saicf-confirm-actions">
+          <button class="saicf-confirm-cancel">Cancel</button>
+          <button class="saicf-confirm-ok">Disconnect</button>
+        </div>
+      </div>
+    `;
+    overlay.querySelector('.saicf-confirm-cancel').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('.saicf-confirm-ok').addEventListener('click', async () => {
+      overlay.remove();
+      try {
+        await fetch('http://192.168.1.173:5000/api/live/cancel_request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+      } catch { /* non-fatal — WS event will still arrive once backend processes */ }
+      // Optimistic local transition. If the backend WS `live_agent_left`
+      // event arrives afterwards, setLiveSessionStatusFn is a no-op (state
+      // already 'active').
+      if (liveSessionStatus === 'agent_joined') {
+        setLiveSessionStatusFn('active');
+      }
+    });
+    chatWindow.appendChild(overlay);
   }
 
   // ── Live chat: System notice helper ──
@@ -2765,8 +2827,8 @@ function toggleMenu(open) {
       sendJoinAck();
       if (requestAgentBtn) {
         const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
-        requestAgentBtn.innerHTML = svgMarkup + ' Agent connected';
-        requestAgentBtn.classList.add('is-disabled');
+        requestAgentBtn.innerHTML = svgMarkup + ' Disconnect Agent';
+        requestAgentBtn.classList.remove('is-disabled');
       }
     } else if (newStatus === 'active' && prev === 'agent_joined') {
       const agentName = effectiveAgentDisplayName('The live agent');
@@ -2826,7 +2888,7 @@ function toggleMenu(open) {
 
   async function sendHeartbeat() {
     try {
-      const res = await fetch('http://192.168.1.5:5000/api/live/heartbeat', {
+      const res = await fetch('http://192.168.1.173:5000/api/live/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2862,7 +2924,7 @@ function toggleMenu(open) {
     // the latest message ID so we don't re-display old messages.
     if (lastAgentMessageId === 0) {
       try {
-        const seedUrl = `http://192.168.1.5:5000/api/live/messages/${sessionId}?after_id=0`;
+        const seedUrl = `http://192.168.1.173:5000/api/live/messages/${sessionId}?after_id=0`;
         const seedRes = await fetch(seedUrl);
         if (seedRes.ok) {
           const seedData = await seedRes.json();
@@ -2894,7 +2956,7 @@ function toggleMenu(open) {
 
   async function pollAgentMessages() {
     try {
-      const url = `http://192.168.1.5:5000/api/live/messages/${sessionId}?after_id=${lastAgentMessageId}`;
+      const url = `http://192.168.1.173:5000/api/live/messages/${sessionId}?after_id=${lastAgentMessageId}`;
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
@@ -2923,8 +2985,11 @@ function toggleMenu(open) {
     }
   }
 
-  // Start heartbeat on reload only if user already has an active conversation
-  if (liveSettings.enabled && sessionStorage.getItem(`chat-history-${botId}`)) {
+  // Start heartbeat on reload only if user already has an active conversation.
+  // Heartbeat drives session creation in the portal and is what powers the
+  // "new visitor" / "new message" notifications — it must run regardless of
+  // whether any agent is currently online — we always want to track sessions.
+  if (sessionStorage.getItem(`chat-history-${botId}`)) {
     liveHeartbeatStarted = true;
     // Eagerly restore chat history BEFORE opening the WS. Otherwise the
     // backend's `widget_init_ack` (session_status='agent_joined') can arrive
@@ -2949,7 +3014,7 @@ function toggleMenu(open) {
   // Explicit disconnects (Clear chat) still call /api/live/disconnect.
   window.addEventListener('beforeunload', () => {
     stopHeartbeat();
-    if (liveSettings.enabled) {
+    if (liveHeartbeatStarted) {
       // Close WS cleanly so backend onclose fires; session row is untouched.
       if (liveWs && liveWs.readyState === WebSocket.OPEN) {
         try { liveWs.close(); } catch { /* non-fatal */ }
@@ -2963,19 +3028,18 @@ function toggleMenu(open) {
       stopHeartbeat();
     } else {
       // Tab became visible again — only resume heartbeat if it was started
-      if (liveSettings.enabled && liveHeartbeatStarted) {
+      if (liveHeartbeatStarted) {
         startHeartbeat();
       }
-      // Reconnect WS if live chat is enabled and WS is down
+      // Reconnect WS if WS is down
       if (
-        liveSettings.enabled &&
         liveHeartbeatStarted &&
         (!liveWs || liveWs.readyState === WebSocket.CLOSED)
       ) {
         connectLiveWs();
       }
       // W15: restart polling if agent session is active
-      if (liveSettings.enabled && (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined')) {
+      if (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined') {
         startAgentPolling(false); // has its own guard, safe to call
       }
     }
@@ -3025,7 +3089,7 @@ function toggleMenu(open) {
   chatInput.addEventListener('input', () => {
     resizeTextarea(chatInput);
     // Visitor typing indicator — only send when live agent is active
-    if (liveSettings.enabled && (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined')) {
+    if (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined') {
       const hasText = chatInput.value.trim().length > 0;
       if (hasText && !visitorIsTyping) {
         visitorIsTyping = true;
@@ -3112,8 +3176,10 @@ function toggleMenu(open) {
     const message = chatInput.value.trim();
     if (!message) return;
 
-    // Start live session heartbeat on first user message
-    if (liveSettings.enabled && !liveHeartbeatStarted) {
+    // Start live session heartbeat on first user message. Heartbeat is the
+    // sole trigger for portal-side "new visitor" notifications, so we start
+    // it independently of agent online presence.
+    if (!liveHeartbeatStarted) {
       liveHeartbeatStarted = true;
       startHeartbeat();
     }
@@ -3142,7 +3208,7 @@ function toggleMenu(open) {
     // would never see it after joining.
     if (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined') {
       const url =
-        `http://192.168.1.5:5000/api/chatbot_response?` +
+        `http://192.168.1.173:5000/api/chatbot_response?` +
         `user_input=${encodeURIComponent(message)}` +
         `&session_id=${sessionId}&bot_id=${botId}&language=english`;
       fetch(url).catch(() => {}); // fire-and-forget
@@ -3168,7 +3234,7 @@ function toggleMenu(open) {
     resetStreamingBotMessage();
 
     const url =
-      `http://192.168.1.5:5000/api/chatbot_response?` +
+      `http://192.168.1.173:5000/api/chatbot_response?` +
       `user_input=${encodeURIComponent(message)}` +
       `&session_id=${sessionId}&bot_id=${botId}&language=english`;
 
