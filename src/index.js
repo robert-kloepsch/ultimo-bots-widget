@@ -132,7 +132,7 @@ function addUltimoBacklink(promotingText, removePoweredBy) {
 }
 
 async function initializeChatWidget() {
-  ['https://portal.ultimo-bots.com', 'https://cdn.jsdelivr.net']
+  ['http://192.168.1.5:5000', 'https://cdn.jsdelivr.net']
     .forEach(h => {
       if (!document.querySelector(`link[rel="preconnect"][href="${h}"]`)) {
         const l = document.createElement('link');
@@ -140,6 +140,7 @@ async function initializeChatWidget() {
       }
     });
   let markedReady = typeof marked !== 'undefined';
+  let markedLoadPromise = null;
   let _linkTarget = '_self';
 
   function applyMarkedLinkRenderer() {
@@ -167,15 +168,30 @@ async function initializeChatWidget() {
 
   async function ensureMarked() {
     if (markedReady) return;
+    if (markedLoadPromise) return markedLoadPromise;
 
-    const mod = await import(/* webpackIgnore: true */
-      'https://cdn.jsdelivr.net/npm/marked@11.1.1/lib/marked.esm.js');
+    markedLoadPromise = (async () => {
+      try {
+        const mod = await import(/* webpackIgnore: true */
+          'https://cdn.jsdelivr.net/npm/marked@11.1.1/lib/marked.esm.js');
 
-    mod.marked.setOptions({ gfm: true, breaks: true, headerIds: false });
-    globalThis.marked = mod.marked;
-    markedReady = true;
-    applyMarkedLinkRenderer();
+        mod.marked.setOptions({ gfm: true, breaks: true, headerIds: false });
+        globalThis.marked = mod.marked;
+        markedReady = true;
+        applyMarkedLinkRenderer();
+      } catch (err) {
+        // Allow a retry on next call if the CDN failed transiently.
+        markedLoadPromise = null;
+        console.error('Failed to load marked:', err);
+      }
+    })();
+
+    return markedLoadPromise;
   }
+
+  // Kick off marked loading as early as possible so bot messages always
+  // render as markdown, regardless of which code path triggers the first render.
+  ensureMarked();
 
   const container = document.getElementById('chat-widget-container');
   if (!container) { console.error('Chat widget container not found'); return; }
@@ -336,6 +352,50 @@ async function initializeChatWidget() {
       align-items: center;
       gap: 8px;
     }
+    .saicf-agent-bar {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      padding-top: 0px;
+      background-color: rgba(0, 0, 0, 0.08);
+      color: inherit;
+      font-size: 12px;
+      line-height: 1.3;
+      text-align: center;
+      margin-top: -8px;
+    }
+    .saicf-agent-bar.is-visible {
+      display: flex;
+    }
+    .saicf-agent-bar-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #22c55e;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+      animation: saicfAgentBarPulse 2s ease-out infinite;
+      flex-shrink: 0;
+      align-self: center;
+      position: relative;
+      top: -1px;
+    }
+    @keyframes saicfAgentBarPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+      70%  { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    .saicf-agent-bar-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0.95;
+    }
+    .saicf-agent-bar-name {
+      font-weight: 600;
+    }
     .saicf-close-btn {
       background: none;
       border: none;
@@ -368,6 +428,7 @@ async function initializeChatWidget() {
       padding: 8px;
       padding-top: 0;
       overflow-y: auto;
+      overflow-anchor: none;
       display: flex;
       flex-direction: column;
       background-color: white;
@@ -471,6 +532,8 @@ async function initializeChatWidget() {
       margin: 6px 0;
     }
     .saicf-message-row.user {
+      flex-direction: column;
+      align-items: flex-end;
       justify-content: flex-end;
     }
     .saicf-message-row.user .saicf-widget-message {
@@ -498,12 +561,35 @@ async function initializeChatWidget() {
     .saicf-message-row.bot .saicf-widget-message {
       max-width: calc(100% - 48px);
     }
+    .saicf-message-row.agent .saicf-widget-message {
+      max-width: calc(100% - 48px);
+    }
+    .saicf-message-row.agent .saicf-message-avatar {
+      background-color: transparent;
+      border: none;
+    }
     .widget-user-message {
       align-self: flex-end !important;
       color: white !important;
       border-radius: 8px !important;
       padding: 8px !important;
       font-size: 15px !important;
+      position: relative;
+    }
+    .saicf-msg-tick {
+      display: block;
+      align-self: flex-end;
+      font-size: 10px;
+      line-height: 1;
+      opacity: 0.75;
+      margin-top: 2px;
+      margin-right: 2px;
+      color: #9ca3af;
+      letter-spacing: -1px;
+    }
+    .saicf-msg-tick.read {
+      color: #0ea5e9;
+      opacity: 1;
     }
     .widget-bot-message {
       align-self: flex-start !important;
@@ -537,6 +623,138 @@ async function initializeChatWidget() {
     .widget-bot-message > :last-child {
       margin-bottom: 0;
     }
+    /* Agent messages – same style as bot */
+    .widget-agent-message {
+      align-self: flex-start !important;
+      background-color: #ffffff !important;
+      color: rgb(43, 43, 43) !important;
+      border-radius: 8px;
+      font-size: 15px !important;
+    }
+    .widget-agent-message h1,
+    .widget-agent-message h2,
+    .widget-agent-message h3,
+    .widget-agent-message h4,
+    .widget-agent-message h5,
+    .widget-agent-message h6 {
+      font-size: 1em !important;
+      line-height: inherit !important;
+      margin: 0 0 .9em !important;
+    }
+    .widget-agent-message strong {
+      color: rgb(57, 57, 57);
+    }
+    .widget-agent-message ul li:not(:last-child) {
+      margin-bottom: 6px;
+    }
+    .widget-agent-message > :first-child {
+      margin-top: 0;
+    }
+    .widget-agent-message > :last-child {
+      margin-bottom: 0;
+    }
+    /* System notice (agent joined / left) */
+    @keyframes saicf-notice-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes saicf-pulse-dot {
+      0%, 80%, 100% { opacity: .25; transform: scale(.7); }
+      40% { opacity: 1; transform: scale(1.1); }
+    }
+    .saicf-system-notice {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 8px 0;
+      animation: saicf-notice-in .35s ease-out;
+    }
+    .saicf-system-notice-text {
+      background: #f0f0f0;
+      color: #666;
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-align: center;
+    }
+    .saicf-waiting-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #888;
+      display: inline-block;
+      animation: saicf-pulse-dot 1.2s ease-in-out infinite;
+    }
+    .saicf-waiting-dot:nth-child(2) { animation-delay: .2s; }
+    .saicf-waiting-dot:nth-child(3) { animation-delay: .4s; }
+    .saicf-cancel-request {
+      background: none;
+      border: 1px solid #999;
+      color: #666;
+      font-size: 11px;
+      padding: 3px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background .2s, color .2s;
+    }
+    .saicf-cancel-request:hover {
+      background: #e0e0e0;
+      color: #333;
+    }
+    .saicf-confirm-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2147483647;
+      animation: saicf-notice-in .2s ease-out;
+    }
+    .saicf-confirm-box {
+      background: #fff;
+      border-radius: 14px;
+      padding: 20px 24px;
+      max-width: 280px;
+      width: 85%;
+      box-shadow: 0 8px 32px rgba(0,0,0,.2);
+      text-align: center;
+    }
+    .saicf-confirm-box p {
+      margin: 0 0 16px;
+      font-size: 14px;
+      color: #333;
+      line-height: 1.4;
+    }
+    .saicf-confirm-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    .saicf-confirm-actions button {
+      flex: 1;
+      padding: 8px 0;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .saicf-confirm-cancel {
+      background: #f0f0f0;
+      color: #555;
+    }
+    .saicf-confirm-cancel:hover { background: #e0e0e0; }
+    .saicf-confirm-ok {
+      background: #e53935;
+      color: #fff;
+    }
+    .saicf-confirm-ok:hover { background: #c62828; }
     /* Headings inside user bubbles: same size as paragraph */
     .widget-user-message h1,
     .widget-user-message h2,
@@ -786,7 +1004,7 @@ async function initializeChatWidget() {
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
-      min-width: 160px;
+      min-width: 200px;
       background: #fff;
       color: #1f2937;
       border: 1px solid rgba(0,0,0,.08);
@@ -820,8 +1038,13 @@ async function initializeChatWidget() {
       text-align: left;
     }
     .saicf-menu-item:hover { background: #f3f4f6; }
+    .saicf-menu-item.is-disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
 
-    .saicf-menu-item svg { width: 1em; height: 1em; display: block; }
+    .saicf-menu-item svg { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+    .saicf-menu-item { white-space: nowrap; }
 
     @media (min-width: 769px) {
       .saicf-chat-window {
@@ -1072,6 +1295,40 @@ async function initializeChatWidget() {
         max-width: 100%;
       }
     }
+
+
+    /* ───────── Agent typing indicator ───────── */
+    .saicf-agent-typing-row {
+      display: flex;
+      align-items: flex-start;
+      margin: 6px 0;
+    }
+    .saicf-agent-typing-bubble {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background-color: #f0f0f0;
+      border-radius: 16px;
+      border-bottom-left-radius: 4px;
+      padding: 10px 14px;
+    }
+    .saicf-agent-typing-bubble .saicf-typing-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: #999;
+      animation: saicfTypingBounce 1.2s ease-in-out infinite;
+    }
+    .saicf-agent-typing-bubble .saicf-typing-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .saicf-agent-typing-bubble .saicf-typing-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    @keyframes saicfTypingBounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-5px); opacity: 1; }
+    }
   `;
   shadowRoot.appendChild(styleTag);
 
@@ -1099,13 +1356,13 @@ async function initializeChatWidget() {
     const hostPageUrl = encodeURIComponent(window.location.href);
 
     const res = await fetch(
-      `https://portal.ultimo-bots.com/api/widget_configuration/${botId}?host_url=${hostPageUrl}`,
+      `http://192.168.1.5:5000/api/widget_configuration/${botId}?host_url=${hostPageUrl}`,
       { cache: 'no-store' }
     );
 
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
-    }
+    } 
     widgetConfig = await res.json();
     promotingText = widgetConfig.promoting_text ?? promotingText;
 
@@ -1130,7 +1387,7 @@ async function initializeChatWidget() {
       // Fetch warm lead parameters to get field details
       try {
         const warmLeadRes = await fetch(
-          `https://portal.ultimo-bots.com/api/warm_lead_function/${botId}`,
+          `http://192.168.1.5:5000/api/warm_lead_function/${botId}`,
           { cache: 'no-store' }
         );
         if (warmLeadRes.ok) {
@@ -1159,6 +1416,25 @@ async function initializeChatWidget() {
     return;
   }
 
+  // Fetch live chat settings (non-blocking — widget works without it)
+  let liveSettings = { enabled: false, show_request_button: false, request_button_text: '' };
+  let agentAvailable = false;
+  try {
+    const [liveRes, availRes] = await Promise.all([
+      fetch(`http://192.168.1.5:5000/api/live_chat_settings_public/${botId}`, { cache: 'no-store' }),
+      fetch(`http://192.168.1.5:5000/api/live/agent_available/${botId}`, { cache: 'no-store' }),
+    ]);
+    if (liveRes.ok) {
+      liveSettings = await liveRes.json();
+    }
+    if (availRes.ok) {
+      const availData = await availRes.json();
+      agentAvailable = availData.available === true;
+    }
+  } catch (err) {
+    console.error('Live chat settings load failed:', err);
+  }
+
   const removePoweredBy     = widgetConfig.remove_powered_by       ?? false;
   addUltimoBacklink(promotingText, removePoweredBy);
 
@@ -1179,6 +1455,22 @@ async function initializeChatWidget() {
   const popUpMessages       = widgetConfig.pop_up_messages         ?? false;
   const inputPlaceholder    = widgetConfig.input_placeholder       || 'Type your message...';
   const avatar              = widgetConfig.avatar_icon_path        || null;
+
+  // Agent avatar from live chat settings (preset SVG or custom image URL)
+  const agentAvatar = (function buildAgentAvatar() {
+    const url = liveSettings.agent_avatar_url || '';
+    const color = liveSettings.agent_avatar_color || '#5616ea';
+    if (!url) return null;
+    const PRESET_SVGS = {
+      'preset:person': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${color}"/><g transform="translate(14,12) scale(0.08)"><path fill="#fff" d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z"/></g></svg>`,
+      'preset:headset': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${color}"/><g transform="translate(12,12) scale(0.078125)"><path fill="#fff" d="M256 48C141.1 48 48 141.1 48 256v40c0 13.3-10.7 24-24 24s-24-10.7-24-24V256C0 114.6 114.6 0 256 0S512 114.6 512 256V400.1c0 48.6-39.4 88-88.1 88L313.6 488c-8.3 14.3-23.8 24-41.6 24H240c-26.5 0-48-21.5-48-48s21.5-48 48-48h32c17.8 0 33.3 9.7 41.6 24l110.4 .1c22.1 0 40-17.9 40-40V256c0-114.9-93.1-208-208-208zM144 208h16c17.7 0 32 14.3 32 32V352c0 17.7-14.3 32-32 32H144c-35.3 0-64-28.7-64-64V272c0-35.3 28.7-64 64-64zm224 0c35.3 0 64 28.7 64 64v48c0 35.3-28.7 64-64 64H352c-17.7 0-32-14.3-32-32V240c0-17.7 14.3-32 32-32h16z"/></g></svg>`,
+      'preset:smile': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${color}"/><g transform="translate(12,12) scale(0.078125)"><path fill="#fff" d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM164.1 325.5C182 346.2 212.6 368 256 368s74-21.8 91.9-42.5c5.8-6.7 15.9-7.4 22.6-1.6s7.4 15.9 1.6 22.6C349.8 372.1 311.1 400 256 400s-93.8-27.9-116.1-53.5c-5.8-6.7-5.1-16.8 1.6-22.6s16.8-5.1 22.6 1.6zM144.4 208a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zm192-32a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"/></g></svg>`,
+    };
+    if (PRESET_SVGS[url]) {
+      return 'data:image/svg+xml,' + encodeURIComponent(PRESET_SVGS[url]);
+    }
+    return url;
+  })();
   const fontFamily          = (widgetConfig.font_family && String(widgetConfig.font_family).trim())
     || '"DM Sans", sans-serif';
 
@@ -1270,9 +1562,23 @@ async function initializeChatWidget() {
               </svg>
               Clear chat
             </button>
+            ${liveSettings.enabled && liveSettings.show_request_button && agentAvailable ? `
+            <button class="saicf-menu-item saicf-menu-item--agent" role="menuitem">
+              <svg viewBox="0 0 512 512" fill="currentColor">
+                <path d="M256 48C141.1 48 48 141.1 48 256c0 39.6 11.1 76.5 30.3 108L48 464l100-30.3c31.5 19.2 68.4 30.3 108 30.3 114.9 0 208-93.1 208-208S370.9 48 256 48z"/>
+              </svg>
+              ${liveSettings.request_button_text || 'Talk to a human'}
+            </button>` : ''}
           </div>
         </div>
       </div>
+    </div>
+    <div class="saicf-agent-bar" style="background-color:${themeColor};color:${headerFontColor};" hidden>
+      <span class="saicf-agent-bar-dot" aria-hidden="true"></span>
+      <span class="saicf-agent-bar-text">
+        <span class="saicf-agent-bar-name"></span>
+        <span class="saicf-agent-bar-status"> is connected</span>
+      </span>
     </div>
   `;
   const poweredByHTML = removePoweredBy
@@ -1377,7 +1683,7 @@ async function initializeChatWidget() {
       if (!requirePreChat || preChatCompleted) {
         ensureMarked().then(() => {
           if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
-            welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+            welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
           }
         });
       }
@@ -1467,6 +1773,12 @@ async function initializeChatWidget() {
   scrollDownBtn.setAttribute('aria-label', 'Scroll to latest');
   scrollDownBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" width="14" height="14"><path d="M169.4 470.6c12.5 12.5 32.8 12.5 45.3 0l160-160c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 370.8V64c0-17.7-14.3-32-32-32s-32 14.3-32 32v306.7L54.6 265.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160z" fill="currentColor"/></svg>';
   scrollDownBtn.addEventListener('click', () => {
+    // In live agent mode, just scroll to bottom — no spacer logic
+    if (liveSessionStatus === 'agent_joined' || liveSessionStatus === 'agent_requested') {
+      scrollToBottom();
+      scrollDownBtn.classList.remove('visible');
+      return;
+    }
     // Recalculate spacer, then smooth-scroll to the anchor position.
     userScrolledAway = false;
     programmaticScroll = true;
@@ -1548,7 +1860,7 @@ async function initializeChatWidget() {
         params[field.name] = preChatFormValues[field.id];
       });
 
-      const response = await fetch('https://portal.ultimo-bots.com/api/leads/pre_chat', {
+      const response = await fetch('http://192.168.1.5:5000/api/leads/pre_chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1576,7 +1888,7 @@ async function initializeChatWidget() {
         await loadChatHistory();
         if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
           await ensureMarked();
-          welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+          welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
         }
       }
     } catch (err) {
@@ -1642,13 +1954,49 @@ function toggleMenu(open) {
     toggleMenu();
   });
 
-  clearBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    toggleMenu(false);
+  function doClearChat() {
+    // W17: Teardown live chat state for old session
+    stopHeartbeat();
+    stopAgentPolling();
+    hideAgentTyping();
+    if (liveWs) { try { liveWs.close(); } catch(e) {} liveWs = null; }
+    wsConnected = false;
+    wsConnecting = false;
+    liveSessionStatus = 'active';
+    lastAgentMessageId = 0; // W5
+    agentRequestPending = false;
+    joinAckSent = false;
+    hideAgentBar();
+    if (visitorTypingTimer) { clearTimeout(visitorTypingTimer); visitorTypingTimer = null; }
+    visitorIsTyping = false;
+
+    // Reset the agent button text back to default
+    if (requestAgentBtn) {
+      const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+      requestAgentBtn.innerHTML = svgMarkup + ` ${liveSettings.request_button_text || 'Talk to a human'}`;
+      requestAgentBtn.classList.remove('is-disabled');
+    }
+    // Remove any waiting notice with cancel button
+    const waitingCancel = chatBody.querySelector('.saicf-cancel-request');
+    if (waitingCancel) waitingCancel.closest('.saicf-system-notice')?.remove();
+
+    // End old session in backend so it disappears from the portal
+    if (liveSettings.enabled) {
+      try {
+        const blob = new Blob(
+          [JSON.stringify({ session_id: sessionId, bot_id: botId })],
+          { type: 'application/json' }
+        );
+        navigator.sendBeacon('http://192.168.1.5:5000/api/live/disconnect', blob);
+      } catch { /* non-fatal */ }
+    }
 
     sessionId = generateSessionId();
     sessionStorage.setItem(`sessionId-${botId}`, sessionId);
     sessionStorage.removeItem(`chat-history-${botId}`);
+
+    // W17: Don't restart heartbeat for new session — wait for first message
+    liveHeartbeatStarted = false;
 
     chatBody.innerHTML = '';
 
@@ -1670,10 +2018,39 @@ function toggleMenu(open) {
     resetStreamingBotMessage();
 
     if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
-      welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+      welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
     }
 
     chatInput.focus();
+  }
+
+  clearBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    toggleMenu(false);
+
+    // Show inline confirm if agent is connected or requested
+    if (liveSessionStatus === 'agent_joined' || liveSessionStatus === 'agent_requested') {
+      const overlay = document.createElement('div');
+      overlay.className = 'saicf-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="saicf-confirm-box">
+          <p>This will disconnect the live agent. Clear chat?</p>
+          <div class="saicf-confirm-actions">
+            <button class="saicf-confirm-cancel">Cancel</button>
+            <button class="saicf-confirm-ok">Clear</button>
+          </div>
+        </div>
+      `;
+      overlay.querySelector('.saicf-confirm-cancel').addEventListener('click', () => overlay.remove());
+      overlay.querySelector('.saicf-confirm-ok').addEventListener('click', () => {
+        overlay.remove();
+        doClearChat();
+      });
+      chatWindow.appendChild(overlay);
+      return;
+    }
+
+    doClearChat();
   });
 
   const _origCloseChat = closeChat;
@@ -1700,6 +2077,12 @@ function toggleMenu(open) {
   // lastUserMsg.offsetTop - TOP_MARGIN. Setting scrollTop to a value
   // it already holds is a no-op (no event, no jitter).
   function recalcSpacer() {
+    // In live agent mode, spacer is always disabled — scroll-to-bottom only
+    if (liveSessionStatus === 'agent_joined' || liveSessionStatus === 'agent_requested') {
+      bottomSpacerEl.style.height = '0px';
+      spacerActive = false;
+      return 0;
+    }
     if (!bottomSpacerEl || !chatBody) return 0;
     const allUserMsgs = chatBody.querySelectorAll('.saicf-message-row.user');
     const lastUserMsg = allUserMsgs[allUserMsgs.length - 1];
@@ -1731,6 +2114,12 @@ function toggleMenu(open) {
 
   // Position user message at top after sending.
   function doPositioning() {
+    // In live agent mode, just scroll to bottom — no spacer pinning
+    if (liveSessionStatus === 'agent_joined' || liveSessionStatus === 'agent_requested') {
+      pendingUserScroll = false;
+      scrollToBottom();
+      return;
+    }
     if (!chatBody || !pendingUserScroll) return;
     pendingUserScroll = false;
 
@@ -1832,6 +2221,12 @@ function toggleMenu(open) {
   });
   bodyResizeObserver.observe(chatBody);
 
+  // Handle scroll positioning for incoming live content (agent messages,
+  // system notices). Simple scroll-to-bottom like standard chat apps.
+  function handleIncomingLiveContent() {
+    scrollToBottom();
+  }
+
   function getPredefinedChips() {
     return Array.from(chatWindow.querySelectorAll('.saicf-predefined-question'));
   }
@@ -1890,6 +2285,702 @@ function toggleMenu(open) {
   let streamingBotRow = null;
   let streamingBotBubble = null;
 
+  // ── Live chat state ──
+  let heartbeatInterval = null;
+  let agentPollInterval = null;
+  let lastAgentMessageId = 0;
+  let liveSessionStatus = 'active'; // active | agent_requested | agent_joined
+  let agentRequestPending = false;
+  let liveHeartbeatStarted = false; // tracks whether heartbeat has been started for this session
+  // Per-session agent display name. Set by `live_agent_joined` / `widget_init_ack`
+  // events when the portal agent picked a custom name in JoinConversationModal.
+  // Falls back to the bot-level `liveSettings.agent_display_name` when null.
+  let currentAgentDisplayName = null;
+
+  function effectiveAgentDisplayName(fallback) {
+    return currentAgentDisplayName || liveSettings.agent_display_name || fallback || 'Agent';
+  }
+
+  // ── WebSocket state ──
+  let liveWs = null;
+  let wsConnected = false;
+  let wsConnecting = false;
+  let wsReconnectDelay = 1000;
+  let wsReconnectTimer = null;
+  let visitorTypingTimer = null;
+  let visitorIsTyping = false;
+  let agentTypingRow = null; // the typing indicator DOM element
+  // Handshake: track join_ack emission so we only send it once per join
+  let joinAckSent = false;
+
+  // ── WebSocket: connect ──
+  function connectLiveWs() {
+    if (wsConnecting) return;
+    if (liveWs && (liveWs.readyState === WebSocket.OPEN || liveWs.readyState === WebSocket.CONNECTING)) return;
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+
+    wsConnecting = true;
+    try {
+      liveWs = new WebSocket('ws://192.168.1.5:5000/ws');
+    } catch (err) {
+      wsConnecting = false;
+      console.error('WS constructor error:', err);
+      scheduleWsReconnect();
+      return;
+    }
+
+    liveWs.addEventListener('open', () => {
+      wsConnecting = false;
+      wsConnected = true;
+      wsReconnectDelay = 1000; // reset backoff on successful connect
+      liveWs.send(JSON.stringify({ type: 'widget_init', session_id: sessionId, bot_id: botId }));
+      // Switch polling to slower interval now that WS is live
+      restartAgentPollingWithCurrentInterval();
+    });
+
+    liveWs.addEventListener('message', (ev) => {
+      let event;
+      try { event = JSON.parse(ev.data); } catch { return; }
+
+      switch (event.type) {
+        case 'widget_init_ack': {
+          // Handshake: backend confirms our widget WS is registered and echoes
+          // the current session status. If the backend says an agent is
+          // currently joined we ALWAYS re-ack — this covers rejoin races
+          // where we never saw the left/joined transition (e.g. brief
+          // disconnect during an agent leave→rejoin cycle).
+          if (event.session_status === 'agent_joined') {
+            if (event.agent_display_name) {
+              currentAgentDisplayName = event.agent_display_name;
+            }
+            if (liveSessionStatus !== 'agent_joined') {
+              setLiveSessionStatusFn('agent_joined');
+            }
+            // Always show the agent bar (covers rejoin where status transition
+            // was a no-op and setLiveSessionStatusFn skipped the UI update).
+            showAgentBar(effectiveAgentDisplayName('A live agent'));
+            // Always try to ack. sendJoinAck handles idempotency itself.
+            joinAckSent = false;
+            sendJoinAck();
+          } else if (event.session_status && event.session_status !== 'agent_joined') {
+            // Backend says no agent is connected. If our local state is stale
+            // (e.g. we missed a `live_agent_left` during a WS disconnect),
+            // sync down so the agent bar is removed.
+            if (liveSessionStatus === 'agent_joined' || liveSessionStatus === 'agent_requested') {
+              setLiveSessionStatusFn(event.session_status === 'agent_requested' ? 'agent_requested' : 'active');
+            }
+            // Safety net: ensure the bar DOM matches reality even if the state
+            // machine was already in sync but the UI wasn't.
+            hideAgentBar();
+          }
+          break;
+        }
+        case 'live_agent_message': {
+          // Deduplicate: skip if a message with this id is already rendered
+          if (event.id && event.id <= lastAgentMessageId) break;
+          if (!event.content) break;
+          hideAgentTyping();
+          appendMessage(event.content, 'agent');
+          if (event.id && event.id > lastAgentMessageId) lastAgentMessageId = event.id;
+          // Send ack via WS; fall back to HTTP if WS is not open
+          if (event.id) sendMessageAck([event.id]);
+          break;
+        }
+        case 'live_agent_joined': {
+          // Capture per-join agent display name from the portal modal so the
+          // visitor sees the personalised name, not the bot-level fallback.
+          if (event.agent_display_name) {
+            currentAgentDisplayName = event.agent_display_name;
+          }
+          // Every agent-join event is a reason to re-ack. This covers the
+          // re-join case where our liveSessionStatus may already be
+          // 'agent_joined' (stale state after a leave/rejoin cycle) — in
+          // that case setLiveSessionStatusFn is a no-op and would not fire
+          // the handshake. So we ack directly here.
+          joinAckSent = false;
+          if (liveSessionStatus !== 'agent_joined') {
+            setLiveSessionStatusFn('agent_joined');
+          } else {
+            sendJoinAck();
+          }
+          break;
+        }
+        case 'live_agent_left': {
+          setLiveSessionStatusFn('active');
+          break;
+        }
+        case 'typing_start': {
+          showAgentTyping();
+          break;
+        }
+        case 'typing_stop': {
+          hideAgentTyping();
+          break;
+        }
+        case 'message_delivered': {
+          // Backend confirms visitor messages were delivered to the agent.
+          // Flip a ✓ indicator on the corresponding user bubbles.
+          if (event.direction === 'visitor') {
+            markVisitorMessagesDelivered(
+              Array.isArray(event.message_ids) ? event.message_ids.length : 1
+            );
+          }
+          break;
+        }
+        case 'messages_read': {
+          // Agent read visitor messages — flip ✓ to ✓✓ on all visitor bubbles
+          markAllVisitorMessagesRead();
+          break;
+        }
+        case 'ping': {
+          wsSend({ type: 'pong' });
+          break;
+        }
+      }
+    });
+
+    liveWs.addEventListener('close', () => {
+      wsConnecting = false;
+      wsConnected = false;
+      visitorIsTyping = false; // W11: reset typing state so next keystroke sends typing_start
+      liveWs = null;
+      // Fallback to faster polling while disconnected
+      restartAgentPollingWithCurrentInterval();
+      // Reconnect with exponential backoff only when live chat is active
+      scheduleWsReconnect();
+    });
+
+    liveWs.addEventListener('error', () => {
+      wsConnecting = false;
+      // close event will follow; nothing extra needed here
+    });
+  }
+
+  function scheduleWsReconnect() {
+    if (!liveSettings.enabled) return;
+    if (!liveHeartbeatStarted) return; // no session yet
+    if (wsReconnectTimer) return;
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectTimer = null;
+      wsReconnectDelay = Math.min(wsReconnectDelay * 2, 10000);
+      connectLiveWs();
+    }, wsReconnectDelay);
+  }
+
+  function wsSend(payload) {
+    if (liveWs && liveWs.readyState === WebSocket.OPEN) {
+      liveWs.send(JSON.stringify(payload));
+      return true;
+    }
+    return false;
+  }
+
+  // Task 3: Message acknowledgment — WS first, HTTP fallback
+  function sendMessageAck(messageIds) {
+    const sent = wsSend({ type: 'message_ack', session_id: sessionId, message_ids: messageIds });
+    if (!sent) {
+      // HTTP fallback when WS is closed
+      fetch(`http://192.168.1.5:5000/api/live/ack/${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_ids: messageIds }),
+      }).catch(() => { /* best-effort */ });
+    }
+  }
+
+  // Handshake: tell the backend that the visitor has seen the agent-joined
+  // notification so the portal's "Connecting..." state can unblock.
+  //
+  // We intentionally do NOT suppress duplicate sends across a session — each
+  // fresh /live/join (including rejoins on the same session_id) needs a new
+  // join_ack because the portal arms a new 10s timer. To avoid WS spam when
+  // this is called from multiple sources in the same tick (widget_init_ack
+  // + live_agent_joined + heartbeat), we debounce within a short window.
+  let lastJoinAckAt = 0;
+  const JOIN_ACK_DEBOUNCE_MS = 500;
+  function sendJoinAck() {
+    const now = Date.now();
+    if (now - lastJoinAckAt < JOIN_ACK_DEBOUNCE_MS) return;
+    lastJoinAckAt = now;
+    joinAckSent = true;
+    const payload = { type: 'join_ack', session_id: sessionId, bot_id: botId };
+    if (wsSend(payload)) return;
+    // WS not open — ensure a connect attempt is in flight and retry shortly
+    connectLiveWs();
+    let tries = 0;
+    const retry = () => {
+      tries += 1;
+      if (wsSend(payload)) return;
+      if (tries < 10) setTimeout(retry, 300);
+    };
+    setTimeout(retry, 300);
+  }
+
+  // ── Agent-connected bar (below header) ──
+  function showAgentBar(agentName) {
+    const bar = chatWindow.querySelector('.saicf-agent-bar');
+    if (!bar) return;
+    const nameEl = bar.querySelector('.saicf-agent-bar-name');
+    if (nameEl) nameEl.textContent = agentName || 'Agent';
+    bar.removeAttribute('hidden');
+    bar.classList.add('is-visible');
+  }
+
+  function hideAgentBar() {
+    const bar = chatWindow.querySelector('.saicf-agent-bar');
+    if (!bar) return;
+    bar.setAttribute('hidden', '');
+    bar.classList.remove('is-visible');
+  }
+
+  // Mark the oldest N user bubbles that don't yet have a delivery tick with ✓.
+  // This is an ordering heuristic (widget doesn't know DB ids) — in practice the
+  // agent acks arrive in the same order as the visitor sends, so this is safe.
+  function markVisitorMessagesDelivered(count) {
+    if (!count || count < 1) count = 1;
+    const bubbles = chatBody.querySelectorAll(
+      '.saicf-message-row.user .saicf-widget-message:not([data-delivery])'
+    );
+    let applied = 0;
+    for (let i = 0; i < bubbles.length && applied < count; i++) {
+      applyDeliveryTick(bubbles[i], 'delivered');
+      applied += 1;
+    }
+  }
+
+  function markAllVisitorMessagesRead() {
+    const bubbles = chatBody.querySelectorAll(
+      '.saicf-message-row.user .saicf-widget-message'
+    );
+    bubbles.forEach(b => applyDeliveryTick(b, 'read'));
+  }
+
+  function applyDeliveryTick(bubble, state) {
+    // state: 'delivered' | 'read'
+    // Idempotent: never downgrade read → delivered
+    const current = bubble.getAttribute('data-delivery');
+    if (current === 'read' && state !== 'read') return;
+    bubble.setAttribute('data-delivery', state);
+    // Place the tick OUTSIDE the bubble as a sibling inside the row, so it
+    // appears right-aligned directly below the user message.
+    const row = bubble.closest('.saicf-message-row');
+    const host = row || bubble.parentNode;
+    let tick = host ? host.querySelector(':scope > .saicf-msg-tick') : null;
+    // Clean up any legacy tick rendered inside the bubble itself.
+    const legacyTick = bubble.querySelector(':scope > .saicf-msg-tick');
+    if (legacyTick) legacyTick.remove();
+    if (!tick) {
+      tick = document.createElement('span');
+      tick.className = 'saicf-msg-tick';
+      if (host) host.appendChild(tick);
+    }
+    tick.textContent = state === 'read' ? '✓✓' : '✓';
+    tick.classList.toggle('read', state === 'read');
+  }
+
+  // Agent typing indicator DOM helpers
+  function showAgentTyping() {
+    if (agentTypingRow && agentTypingRow.isConnected) return;
+    agentTypingRow = document.createElement('div');
+    agentTypingRow.className = 'saicf-agent-typing-row';
+    agentTypingRow.innerHTML = '<div class="saicf-agent-typing-bubble"><span class="saicf-typing-dot"></span><span class="saicf-typing-dot"></span><span class="saicf-typing-dot"></span></div>';
+    chatBody.insertBefore(agentTypingRow, bottomSpacerEl);
+    scrollToBottom();
+  }
+
+  function hideAgentTyping() {
+    if (agentTypingRow && agentTypingRow.isConnected) {
+      agentTypingRow.remove();
+    }
+    agentTypingRow = null;
+  }
+
+  // ── Dynamic polling interval helper ──
+  function currentPollInterval() {
+    return wsConnected ? 5000 : 2000;
+  }
+
+  function restartAgentPollingWithCurrentInterval() {
+    if (!agentPollInterval) return; // not polling — nothing to restart
+    stopAgentPolling();
+    startAgentPolling(false); // don't re-trigger WS connect during interval adjustment
+  }
+
+  // ── Live chat: Request Agent menu item ──
+  const requestAgentBtn = chatWindow.querySelector('.saicf-menu-item--agent');
+  if (requestAgentBtn) {
+    requestAgentBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      toggleMenu(false);
+      if (agentRequestPending || liveSessionStatus === 'agent_joined') return;
+      requestAgentBtn.classList.add('is-disabled');
+      agentRequestPending = true;
+      try {
+        // Check if any agent is currently online before requesting
+        const availRes = await fetch(`http://192.168.1.5:5000/api/live/agent_available/${botId}`);
+        if (availRes.ok) {
+          const availData = await availRes.json();
+          if (!availData.available) {
+            appendSystemNotice('No agent available. Please use the AI assistant.');
+            requestAgentBtn.classList.remove('is-disabled');
+            agentRequestPending = false;
+            return;
+          }
+        }
+        // Ensure a live session exists before requesting an agent
+        if (!liveHeartbeatStarted) {
+          liveHeartbeatStarted = true;
+          await sendHeartbeat();
+          startHeartbeat();
+        }
+        let res = await fetch('http://192.168.1.5:5000/api/live/request_agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, bot_id: botId }),
+        });
+        // Defensive: if the stored session is stale/ended (e.g. the previous
+        // tab's beforeunload disconnected it), regenerate a fresh session
+        // and retry once.
+        if (res.status === 400) {
+          sessionId = generateSessionId();
+          sessionStorage.setItem(`sessionId-${botId}`, sessionId);
+          try { await sendHeartbeat(); } catch { /* non-fatal */ }
+          res = await fetch('http://192.168.1.5:5000/api/live/request_agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, bot_id: botId }),
+          });
+        }
+        if (res.ok) {
+          liveSessionStatus = 'agent_requested';
+          requestAgentBtn.innerHTML = requestAgentBtn.querySelector('svg').outerHTML + ' Waiting for agent…';
+          appendSystemNotice('You requested a live agent. Please wait', {
+            waiting: true,
+            onCancel: async (notice) => {
+              try {
+                await fetch('http://192.168.1.5:5000/api/live/cancel_request', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ session_id: sessionId }),
+                });
+              } catch {}
+              notice.remove();
+              liveSessionStatus = 'active';
+              agentRequestPending = false;
+              stopAgentPolling();
+              if (requestAgentBtn) {
+                const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+                requestAgentBtn.innerHTML = svgMarkup + ` ${liveSettings.request_button_text || 'Talk to a human'}`;
+                requestAgentBtn.classList.remove('is-disabled');
+              }
+              appendSystemNotice('Agent request cancelled.');
+            },
+          });
+          startAgentPolling();
+        } else {
+          requestAgentBtn.classList.remove('is-disabled');
+          agentRequestPending = false;
+        }
+      } catch (err) {
+        console.error('Request agent failed:', err);
+        requestAgentBtn.classList.remove('is-disabled');
+        agentRequestPending = false;
+      }
+    });
+  }
+
+  // ── Live chat: System notice helper ──
+  function appendSystemNotice(text, { waiting = false, onCancel = null } = {}) {
+    const notice = document.createElement('div');
+    notice.className = 'saicf-system-notice';
+    const span = document.createElement('span');
+    span.className = 'saicf-system-notice-text';
+    span.textContent = text;
+    if (waiting) {
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'saicf-waiting-dot';
+        span.appendChild(dot);
+      }
+    }
+    notice.appendChild(span);
+    if (onCancel) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'saicf-cancel-request';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', () => onCancel(notice));
+      notice.appendChild(cancelBtn);
+    }
+    chatBody.insertBefore(notice, bottomSpacerEl);
+    scrollToBottom();
+    return notice;
+  }
+
+  // ── Live chat: Centralized status transition (W6) ──
+  function setLiveSessionStatusFn(newStatus) {
+    // Handshake: regardless of whether we're transitioning or already in
+    // agent_joined state, every "agent joined" signal from the backend is a
+    // reason to re-ack the portal. This makes leave→rejoin cycles robust
+    // even when our local status is stale.
+    if (newStatus === 'agent_joined') {
+      sendJoinAck();
+    }
+    if (newStatus === liveSessionStatus) return;
+    const prev = liveSessionStatus;
+    liveSessionStatus = newStatus;
+
+    if (newStatus === 'agent_joined' && prev !== 'agent_joined') {
+      // Remove the waiting notice with cancel button
+      const waitingCancel = chatBody.querySelector('.saicf-cancel-request');
+      if (waitingCancel) waitingCancel.closest('.saicf-system-notice')?.remove();
+
+      // Immediately kill AI-mode spacer so live scroll-to-bottom works
+      if (bottomSpacerEl) bottomSpacerEl.style.height = '0px';
+      spacerActive = false;
+      pendingUserScroll = false;
+
+      const agentName = effectiveAgentDisplayName('A live agent');
+      // Guard: if the agent_joined signal arrives before welcome messages
+      // have been rendered (e.g. widget_init_ack on a restored session while
+      // the history/welcome render is still pending), the system notice
+      // would appear above the welcome message. Render welcome first.
+      //
+      // BUT: if sessionStorage already has saved chat history, don't inject
+      // welcome messages — the eager loadChatHistory() at module init will
+      // restore them. Injecting welcome here would cause the later history
+      // restore to be skipped (empty-chatBody guard) and the real chat log
+      // would be lost after a refresh while an agent is joined.
+      if (
+        chatBody.querySelectorAll('.saicf-message-row').length === 0 &&
+        !sessionStorage.getItem(`chat-history-${botId}`) &&
+        Array.isArray(welcomeMessages) && welcomeMessages.length
+      ) {
+        welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
+      }
+      appendSystemNotice(`${agentName} has joined the chat.`);
+      showAgentBar(agentName);
+      scrollToBottom();
+      startAgentPolling();
+      // Handshake: tell the portal we saw the agent join (unblocks Connecting…)
+      sendJoinAck();
+      if (requestAgentBtn) {
+        const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+        requestAgentBtn.innerHTML = svgMarkup + ' Agent connected';
+        requestAgentBtn.classList.add('is-disabled');
+      }
+    } else if (newStatus === 'active' && prev === 'agent_joined') {
+      const agentName = effectiveAgentDisplayName('The live agent');
+      appendSystemNotice(`${agentName} has left the chat.`);
+      hideAgentBar();
+      stopAgentPolling();
+      agentRequestPending = false;
+      // Reset per-session agent name so the next join starts clean.
+      currentAgentDisplayName = null;
+      // Reset handshake so the next join triggers a fresh ack
+      joinAckSent = false;
+      if (requestAgentBtn) {
+        const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+        requestAgentBtn.innerHTML = svgMarkup + ` ${liveSettings.request_button_text || 'Talk to a human'}`;
+        requestAgentBtn.classList.remove('is-disabled');
+      }
+    } else if (newStatus === 'active' && prev === 'agent_requested') {
+      // Agent request timed out (or was reverted server-side). No agent
+      // ever joined, so don't render "X has left the chat". Instead remove
+      // the waiting notice, inform the visitor, and surface the configured
+      // offline_message as a bot fallback if one is set.
+      const waitingCancel = chatBody.querySelector('.saicf-cancel-request');
+      if (waitingCancel) waitingCancel.closest('.saicf-system-notice')?.remove();
+      appendSystemNotice('No agent responded in time. Your request was cancelled.');
+      const offlineMsg = (liveSettings && liveSettings.offline_message) || '';
+      if (offlineMsg) {
+        appendMessage(offlineMsg, 'bot');
+      }
+      stopAgentPolling();
+      agentRequestPending = false;
+      if (requestAgentBtn) {
+        const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+        requestAgentBtn.innerHTML = svgMarkup + ` ${liveSettings.request_button_text || 'Talk to a human'}`;
+        requestAgentBtn.classList.remove('is-disabled');
+      }
+    }
+  }
+
+  // ── Live chat: Heartbeat ──
+  function startHeartbeat() {
+    if (heartbeatInterval) return;
+    // Open the live WS proactively. The backend uses it to push `live_agent_joined`
+    // the instant the portal agent clicks Join. Without this, a visitor who never
+    // clicked "Talk to human" only learns about an agent join via the 15s heartbeat
+    // poll — causing the portal's "Connecting…" state to stall for ~15s on first join.
+    try { connectLiveWs(); } catch (_) { /* best-effort */ }
+    sendHeartbeat(); // fire immediately
+    heartbeatInterval = setInterval(sendHeartbeat, 15000);
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  }
+
+  async function sendHeartbeat() {
+    try {
+      const res = await fetch('http://192.168.1.5:5000/api/live/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          bot_id: botId,
+          visitor_name: 'Website Visitor',
+          page_url: window.location.href,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.session_status === 'agent_joined' || data.session_status === 'active') {
+          setLiveSessionStatusFn(data.session_status);
+        }
+        // If agent joined and polling isn't running, start it immediately
+        if (data.session_status === 'agent_joined' && !agentPollInterval) {
+          startAgentPolling();
+        }
+      }
+    } catch (err) {
+      // Heartbeat is best-effort; don't break the widget
+    }
+  }
+
+  // ── Live chat: Agent message polling ──
+  async function startAgentPolling(connectWs = true) {
+    if (agentPollInterval) return;
+
+    // Connect WS immediately so real-time events arrive ASAP
+    if (connectWs) connectLiveWs();
+
+    // If lastAgentMessageId is 0 (page reload / first join), seed it with
+    // the latest message ID so we don't re-display old messages.
+    if (lastAgentMessageId === 0) {
+      try {
+        const seedUrl = `http://192.168.1.5:5000/api/live/messages/${sessionId}?after_id=0`;
+        const seedRes = await fetch(seedUrl);
+        if (seedRes.ok) {
+          const seedData = await seedRes.json();
+          const msgs = seedData.messages || [];
+          if (msgs.length > 0) {
+            lastAgentMessageId = msgs[msgs.length - 1].id || 0;
+          }
+          // Check status from seed response — agent may have joined during fetch
+          if (seedData.status && seedData.status !== liveSessionStatus) {
+            setLiveSessionStatusFn(seedData.status);
+          }
+        }
+      } catch (_) { /* best-effort */ }
+    }
+
+    // Guard again — seed await may have allowed another caller to start polling
+    if (agentPollInterval) return;
+
+    pollAgentMessages(); // fire immediately
+    agentPollInterval = setInterval(pollAgentMessages, currentPollInterval());
+  }
+
+  function stopAgentPolling() {
+    if (agentPollInterval) {
+      clearInterval(agentPollInterval);
+      agentPollInterval = null;
+    }
+  }
+
+  async function pollAgentMessages() {
+    try {
+      const url = `http://192.168.1.5:5000/api/live/messages/${sessionId}?after_id=${lastAgentMessageId}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      if (data.status === 'agent_joined' || data.status === 'active') {
+        const prevPollStatus = liveSessionStatus;
+        setLiveSessionStatusFn(data.status);
+        if (data.status === 'active' && (prevPollStatus === 'agent_joined' || prevPollStatus === 'agent_requested')) {
+          // Agent left — already handled by setLiveSessionStatusFn; stop polling
+          return;
+        }
+      }
+
+      const messages = data.messages || [];
+      for (const msg of messages) {
+        if (msg.id && msg.id <= lastAgentMessageId) continue; // skip already-seen
+        if (msg.type === 'agent' && msg.content) {
+          appendMessage(msg.content, 'agent');
+        }
+        if (msg.id && msg.id > lastAgentMessageId) {
+          lastAgentMessageId = msg.id;
+        }
+      }
+    } catch (err) {
+      // Polling errors are non-fatal
+    }
+  }
+
+  // Start heartbeat on reload only if user already has an active conversation
+  if (liveSettings.enabled && sessionStorage.getItem(`chat-history-${botId}`)) {
+    liveHeartbeatStarted = true;
+    // Eagerly restore chat history BEFORE opening the WS. Otherwise the
+    // backend's `widget_init_ack` (session_status='agent_joined') can arrive
+    // while chatBody is still empty and the agent-joined transition in
+    // setLiveSessionStatusFn would inject welcome messages on top of an
+    // empty body — which then blocks a later loadChatHistory() call because
+    // the "is chatBody empty?" guard no longer matches.
+    loadChatHistory().catch(() => { /* non-fatal */ });
+    startHeartbeat();
+  }
+
+  // ── Graceful handling on tab close / refresh / navigation ──
+  // We intentionally do NOT send /api/live/disconnect here. A `beforeunload`
+  // can mean "refresh", "same-tab navigation" or "tab closed" — we can't tell
+  // them apart reliably. Forcing the session to `ended` immediately kicks the
+  // connected agent out on every F5, which is user-hostile.
+  //
+  // Instead we let the backend's heartbeat-timeout mechanism decide:
+  //   - Refresh: heartbeat resumes within ~1–2s → session stays alive.
+  //   - Real close: heartbeat stops → `cleanup_stale` ends the session after
+  //     the configured timeout → portal sees it vanish naturally.
+  // Explicit disconnects (Clear chat) still call /api/live/disconnect.
+  window.addEventListener('beforeunload', () => {
+    stopHeartbeat();
+    if (liveSettings.enabled) {
+      // Close WS cleanly so backend onclose fires; session row is untouched.
+      if (liveWs && liveWs.readyState === WebSocket.OPEN) {
+        try { liveWs.close(); } catch { /* non-fatal */ }
+      }
+    }
+  });
+
+  // ── Pause/resume on tab visibility change ──
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      stopHeartbeat();
+    } else {
+      // Tab became visible again — only resume heartbeat if it was started
+      if (liveSettings.enabled && liveHeartbeatStarted) {
+        startHeartbeat();
+      }
+      // Reconnect WS if live chat is enabled and WS is down
+      if (
+        liveSettings.enabled &&
+        liveHeartbeatStarted &&
+        (!liveWs || liveWs.readyState === WebSocket.CLOSED)
+      ) {
+        connectLiveWs();
+      }
+      // W15: restart polling if agent session is active
+      if (liveSettings.enabled && (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined')) {
+        startAgentPolling(false); // has its own guard, safe to call
+      }
+    }
+  });
+
   chatWidgetIcon.addEventListener('click', async () => {
     // Only load chat history if pre-chat is completed or not required
     if (!requirePreChat || preChatCompleted) {
@@ -1897,7 +2988,7 @@ function toggleMenu(open) {
         await loadChatHistory();
         if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
           await ensureMarked();
-          welcomeMessages.forEach(msg => appendMessage(msg, 'bot'));
+          welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
         }
       }
     }
@@ -1933,6 +3024,17 @@ function toggleMenu(open) {
 
   chatInput.addEventListener('input', () => {
     resizeTextarea(chatInput);
+    // Visitor typing indicator — only send when live agent is active
+    if (liveSettings.enabled && (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined')) {
+      const hasText = chatInput.value.trim().length > 0;
+      if (hasText && !visitorIsTyping) {
+        visitorIsTyping = true;
+        wsSend({ type: 'typing_start', session_id: sessionId });
+      } else if (!hasText && visitorIsTyping) {
+        visitorIsTyping = false;
+        wsSend({ type: 'typing_stop', session_id: sessionId });
+      }
+    }
   });
 
   function resizeTextarea(el) {
@@ -2010,6 +3112,12 @@ function toggleMenu(open) {
     const message = chatInput.value.trim();
     if (!message) return;
 
+    // Start live session heartbeat on first user message
+    if (liveSettings.enabled && !liveHeartbeatStarted) {
+      liveHeartbeatStarted = true;
+      startHeartbeat();
+    }
+
     // Set up scroll positioning flags
     pendingUserScroll = true;
     isStreamingState = true;
@@ -2018,6 +3126,37 @@ function toggleMenu(open) {
     appendMessage(message, 'user', { skipScroll: true });
     chatInput.value = '';
     resizeTextarea(chatInput);
+    // Stop visitor typing indicator when message is sent
+    if (visitorIsTyping) {
+      visitorIsTyping = false;
+      if (visitorTypingTimer) { clearTimeout(visitorTypingTimer); visitorTypingTimer = null; }
+      wsSend({ type: 'typing_stop', session_id: sessionId });
+    }
+
+    // During agent_requested or agent_joined: forward to backend so the
+    // visitor message is persisted to chat_history and pushed to the portal
+    // via the live WS channel. The backend (generate_response) detects the
+    // live session state, saves the user_input, publishes a
+    // `live_visitor_message` event, and skips AI generation. Without this
+    // call the message would only live in widget localStorage and the agent
+    // would never see it after joining.
+    if (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined') {
+      const url =
+        `http://192.168.1.5:5000/api/chatbot_response?` +
+        `user_input=${encodeURIComponent(message)}` +
+        `&session_id=${sessionId}&bot_id=${botId}&language=english`;
+      fetch(url).catch(() => {}); // fire-and-forget
+      saveChatHistory();
+      scrollToBottom();
+      isStreamingState = false;
+      pendingUserScroll = false;
+      return;
+    }
+
+    // Safety net: if we reach the AI path, no live agent is connected. Make
+    // sure the "<agent> is connected" bar isn't lingering from a stale state
+    // (e.g. missed `live_agent_left` during a WS disconnect).
+    hideAgentBar();
 
     setBusy(true);
     setLoading(true);
@@ -2029,7 +3168,7 @@ function toggleMenu(open) {
     resetStreamingBotMessage();
 
     const url =
-      `https://portal.ultimo-bots.com/api/chatbot_response?` +
+      `http://192.168.1.5:5000/api/chatbot_response?` +
       `user_input=${encodeURIComponent(message)}` +
       `&session_id=${sessionId}&bot_id=${botId}&language=english`;
 
@@ -2092,7 +3231,12 @@ function toggleMenu(open) {
 
       es.addEventListener('end', () => {
         if (!hasError) {
-          updateStreamingBotMessage(currentBotMessage);
+          if (currentBotMessage) {
+            updateStreamingBotMessage(currentBotMessage);
+          } else {
+            // No bot content — remove streaming placeholder without creating an empty bubble
+            resetStreamingBotMessage();
+          }
         }
         es.close();
         finish();
@@ -2157,12 +3301,17 @@ function toggleMenu(open) {
     });
   }
 
-  function createMessageRow(text, sender) {
+  function createMessageRow(text, sender, options = {}) {
     const row = document.createElement('div');
     row.className = `saicf-message-row ${sender}`;
     row.dataset.sender = sender;
 
-    if (sender === 'bot' && avatar) {
+    if (sender === 'agent' && agentAvatar) {
+      const avatarEl = document.createElement('div');
+      avatarEl.className = 'saicf-message-avatar';
+      avatarEl.style.backgroundImage = `url("${agentAvatar}")`;
+      row.appendChild(avatarEl);
+    } else if (sender === 'bot' && avatar) {
       const avatarEl = document.createElement('div');
       avatarEl.className = 'saicf-message-avatar';
       avatarEl.style.backgroundImage = `url("${avatar}")`;
@@ -2177,11 +3326,13 @@ function toggleMenu(open) {
       bubble.textContent = text;
     }
     row.appendChild(bubble);
+
+
     return row;
   }
 
   function appendMessage(text, sender, options = {}) {
-    const row = createMessageRow(text, sender);
+    const row = createMessageRow(text, sender, options);
     chatBody.insertBefore(row, bottomSpacerEl);
     if (!options.skipScroll) {
       scrollToBottom();
@@ -2265,7 +3416,11 @@ function toggleMenu(open) {
       return;
     }
 
-    await ensureMarked();
+    // Note: marked is NOT needed here — saved messages already contain
+    // pre-rendered HTML from the original send path. Keeping this fully
+    // synchronous ensures that when we call loadChatHistory() at module
+    // init, the DOM is populated before the WS `widget_init_ack` can arrive
+    // and trigger the agent_joined welcome-inject path.
 
     try {
       const messages = JSON.parse(saved);
@@ -2275,7 +3430,12 @@ function toggleMenu(open) {
         row.className = `saicf-message-row ${msg.sender}`;
         row.dataset.sender = msg.sender;
 
-        if (msg.sender === 'bot' && avatar) {
+        if (msg.sender === 'agent' && agentAvatar) {
+          const avatarEl = document.createElement('div');
+          avatarEl.className = 'saicf-message-avatar';
+          avatarEl.style.backgroundImage = `url("${agentAvatar}")`;
+          row.appendChild(avatarEl);
+        } else if (msg.sender === 'bot' && avatar) {
           const avatarEl = document.createElement('div');
           avatarEl.className = 'saicf-message-avatar';
           avatarEl.style.backgroundImage = `url("${avatar}")`;
