@@ -2572,6 +2572,7 @@ function toggleMenu(open) {
   let visitorTypingTimer = null;
   let visitorIsTyping = false;
   let agentTypingRow = null; // the typing indicator DOM element
+  let agentTypingTimer = null; // safety timeout to auto-hide stuck typing dots
   // Handshake: track join_ack emission so we only send it once per join
   let joinAckSent = false;
 
@@ -2647,10 +2648,13 @@ function toggleMenu(open) {
           break;
         }
         case 'live_agent_message': {
+          // Any agent message means the agent is no longer "typing" — clear
+          // the dots BEFORE the dedup/early-return checks so a re-delivered
+          // message (after WS reconnect) still hides a stuck indicator.
+          hideAgentTyping();
           // Deduplicate: skip if a message with this id is already rendered
           if (event.id && event.id <= lastAgentMessageId) break;
           if (!event.content) break;
-          hideAgentTyping();
           appendMessage(event.content, 'agent');
           if (event.id && event.id > lastAgentMessageId) lastAgentMessageId = event.id;
           // Send ack via WS; fall back to HTTP if WS is not open
@@ -2685,6 +2689,7 @@ function toggleMenu(open) {
           break;
         }
         case 'live_agent_left': {
+          hideAgentTyping();
           setLiveSessionStatusFn('active');
           break;
         }
@@ -2881,6 +2886,13 @@ function toggleMenu(open) {
 
   // Agent typing indicator DOM helpers
   function showAgentTyping() {
+    // Always (re)arm the safety auto-hide timer — covers dropped
+    // `typing_stop` events (network hiccup, agent tab closed without
+    // emitting stop, backend missed sending one). Keep this generous so
+    // the indicator does not flicker during natural typing pauses, but
+    // short enough that a stuck indicator clears itself within ~10s.
+    if (agentTypingTimer) { clearTimeout(agentTypingTimer); }
+    agentTypingTimer = setTimeout(() => { hideAgentTyping(); }, 10000);
     if (agentTypingRow && agentTypingRow.isConnected) return;
     agentTypingRow = document.createElement('div');
     agentTypingRow.className = 'saicf-agent-typing-row';
@@ -2890,6 +2902,7 @@ function toggleMenu(open) {
   }
 
   function hideAgentTyping() {
+    if (agentTypingTimer) { clearTimeout(agentTypingTimer); agentTypingTimer = null; }
     if (agentTypingRow && agentTypingRow.isConnected) {
       agentTypingRow.remove();
     }
