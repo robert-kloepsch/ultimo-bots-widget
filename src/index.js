@@ -567,6 +567,10 @@ async function initializeChatWidget() {
       cursor: pointer;
       text-decoration: underline;
     }
+    .saicf-powered-by-text.saicf-powered-by-text--custom {
+      cursor: default;
+      text-decoration: none;
+    }
     .saicf-input-send-container {
       display: flex;
       border-top: 1px solid #f1f1f1;
@@ -1594,6 +1598,10 @@ async function initializeChatWidget() {
   }
 
   const removePoweredBy     = widgetConfig.remove_powered_by       ?? false;
+  const customBrandingText  = (widgetConfig.custom_branding_text || '').trim();
+  const customBrandingTextHtml = customBrandingText
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   addUltimoBacklink(promotingText, removePoweredBy);
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
@@ -1754,7 +1762,13 @@ async function initializeChatWidget() {
     </div>
   `;
   const poweredByHTML = removePoweredBy
-    ? ''
+    ? (customBrandingText
+      ? `
+        <div class="saicf-powered-by">
+          <span class="saicf-powered-by-text saicf-powered-by-text--custom">${customBrandingTextHtml}</span>
+        </div>
+      `
+      : '')
     : `
         <div class="saicf-powered-by">
           <a class="saicf-powered-by-text"
