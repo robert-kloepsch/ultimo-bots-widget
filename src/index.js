@@ -151,33 +151,6 @@ function deriveLiveCtaColors(themeColorHex, headerFontColorHex) {
   }
 })();
 
-function addUltimoBacklink(promotingText, removePoweredBy) {
-  if (
-    removePoweredBy ||
-    document.querySelector('a[href="https://www.ultimo-bots.com"]')
-  ) {
-    return;
-  }
-
-  const backlink = document.createElement('a');
-  backlink.href = 'https://www.ultimo-bots.com';
-  backlink.target = '_blank';
-  backlink.rel = 'noopener noreferrer';
-  backlink.textContent = promotingText;
-  backlink.style.display = 'block';
-  backlink.style.textAlign = 'center';
-  backlink.style.fontSize = '4px';
-  backlink.style.opacity = '0.9';
-  backlink.style.textDecoration = 'none';
-  backlink.style.color = '#555555';
-  backlink.style.margin = '0';
-  backlink.style.padding = '0';
-  backlink.style.paddingTop = '2px';
-  backlink.style.paddingBottom = '2px';
-
-  document.body.appendChild(backlink);
-}
-
 async function initializeChatWidget() {
   ['https://portal.ultimo-bots.com', 'https://cdn.jsdelivr.net']
     .forEach(h => {
@@ -1574,7 +1547,6 @@ async function initializeChatWidget() {
     }
   } catch (err) {
     console.error('Widget config load failed – widget aborted', err);
-    addUltimoBacklink(promotingText, false);
     return;
   }
 
@@ -1602,7 +1574,6 @@ async function initializeChatWidget() {
   const customBrandingTextHtml = customBrandingText
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  addUltimoBacklink(promotingText, removePoweredBy);
 
   const themeColor          = widgetConfig.theme_color             || '#0082ba';
   const hoverColor          = widgetConfig.button_hover_color      || '#0595d3';
