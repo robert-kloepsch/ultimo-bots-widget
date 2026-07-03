@@ -1464,6 +1464,221 @@ async function initializeChatWidget() {
       0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
       30% { transform: translateY(-5px); opacity: 1; }
     }
+
+    /**********************************************************
+     * In-chat product gallery — mirrors the portal
+     * ProductCarousel (chatModal.js). Structured product cards
+     * the agent attaches to a reply (delivered on the products
+     * SSE event), rendered as a horizontally-scrollable strip
+     * under the bot reply. Arrow-hover + the "View" CTA pick up
+     * the bot's theme_color (see the dynamic style block below).
+     **********************************************************/
+
+    /* The bot row is a flex row (avatar + bubble). The gallery
+       breaks to its own full-width line beneath the reply. */
+    .saicf-message-row.bot { flex-wrap: wrap; }
+
+    .ub-pc-inline {
+      flex-basis: 100%;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 2px;
+    }
+    /* Indent the strip past the bot avatar so it lines up with the bubble. */
+    .ub-pc-inline.ub-pc-inline--indent { padding-left: 24px; }
+
+    .ub-pc {
+      position: relative;
+      width: 100%;
+    }
+
+    .ub-pc-track {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      padding: 6px 2px 10px;          /* room so hover-lift + shadow aren't clipped */
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;          /* Firefox */
+    }
+    .ub-pc-track::-webkit-scrollbar { display: none; }  /* WebKit */
+
+    /* ── Card ── */
+    .ub-pc-card {
+      flex: 0 0 auto;
+      width: 190px;
+      scroll-snap-align: start;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      border: 1px solid #ececf1;
+      border-radius: 16px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      box-shadow: 0 1px 2px rgba(20, 20, 40, 0.04);
+      will-change: transform;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+                  box-shadow 0.3s ease,
+                  border-color 0.3s ease;
+    }
+    .ub-pc-card-link { cursor: pointer; }
+    .ub-pc-card-link:hover {
+      transform: translateY(-4px);
+      border-color: #cfcfd6;
+    }
+
+    /* ── Image ── */
+    .ub-pc-img {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;          /* fixed -> no layout shift while images load */
+      background: linear-gradient(135deg, #f5f3ff 0%, #f0f0f5 100%);
+      overflow: hidden;
+    }
+    .ub-pc-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: translateZ(0);
+      will-change: transform;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .ub-pc-card-link:hover .ub-pc-img img { transform: scale(1.06) translateZ(0); }
+
+    .ub-pc-img-fallback {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #b9b4d6;
+    }
+
+    .ub-pc-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #2c2c3a;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(6px);
+      border-radius: 999px;
+      box-shadow: 0 1px 3px rgba(20, 20, 40, 0.12);
+      text-transform: capitalize;
+    }
+
+    /* ── Body ── */
+    .ub-pc-body {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 11px 12px 12px;
+      flex: 1;
+    }
+
+    .ub-pc-brand {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #8a86a0;
+    }
+
+    .ub-pc-title {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: #1a1a2e;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .ub-pc-specs {
+      font-size: 11.5px;
+      line-height: 1.35;
+      color: #6f6b82;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: capitalize;
+    }
+
+    .ub-pc-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 9px;
+    }
+
+    .ub-pc-price {
+      font-size: 15px;
+      font-weight: 700;
+      color: #15151f;
+      white-space: nowrap;
+    }
+
+    /* CTA colour is overridden with theme_color in the dynamic block. */
+    .ub-pc-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #3a3550;
+      white-space: nowrap;
+    }
+    .ub-pc-cta-ic { display: inline-flex; }
+    .ub-pc-card-link:hover .ub-pc-cta { text-decoration: underline; }
+
+    /* ── Scroll arrows ── */
+    .ub-pc-arrow {
+      position: absolute;
+      top: calc(50% - 12px);          /* roughly centred on the image, not the text */
+      transform: translateY(-50%);
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 1px solid #ececf1;
+      background: #ffffff;
+      color: #3a3550;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      z-index: 3;
+      box-shadow: 0 4px 14px rgba(20, 20, 40, 0.16);
+      transition: opacity 0.2s ease, transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    /* Arrow hover colour is overridden with theme_color in the dynamic block. */
+    .ub-pc-arrow:hover { background: #3a3550; color: #fff; border-color: #3a3550; }
+    .ub-pc-arrow:active { transform: translateY(-50%) scale(0.92); }
+    .ub-pc-arrow-l { left: -6px; }
+    .ub-pc-arrow-r { right: -6px; }
+
+    .ub-pc-arrow-off {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @media (max-width: 768px) {
+      .ub-pc-card { width: 158px; }
+      /* On touch devices the arrows just get in the way — swipe instead. */
+      .ub-pc-arrow { display: none; }
+    }
   `;
   shadowRoot.appendChild(styleTag);
 
@@ -1761,7 +1976,7 @@ async function initializeChatWidget() {
     </div>
     <div class="saicf-pre-chat-container hidden">
       <div class="saicf-pre-chat-header">
-        <svg class="saicf-pre-chat-icon" viewBox="0 0 640 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <svg class="saicf-pre-chat-icon" style="color:${themeColor};" viewBox="0 0 640 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
           <path d="M208 352c114.9 0 208-78.8 208-176S322.9 0 208 0S0 78.8 0 176c0 38.6 14.7 74.3 39.6 103.4c-3.5 9.4-8.7 17.7-14.2 24.7c-4.8 6.2-9.7 11-13.3 14.3c-1.8 1.6-3.3 2.9-4.3 3.7c-.5 .4-.9 .7-1.1 .8l-.2 .2 0 0 0 0C1 327.2-1.4 334.4 .8 340.9S9.1 352 16 352c21.8 0 43.8-5.6 62.1-12.5c9.2-3.5 17.8-7.4 25.3-11.4C134.1 343.3 169.8 352 208 352zM448 176c0 112.3-99.1 196.9-216.5 207C255.8 457.4 336.4 512 432 512c38.2 0 73.9-8.7 104.7-23.9c7.5 4 16 7.9 25.2 11.4c18.3 6.9 40.3 12.5 62.1 12.5c6.9 0 13.1-4.5 15.2-11.1c2.1-6.6-.2-13.8-5.8-17.9l0 0 0 0-.2-.2c-.2-.2-.6-.4-1.1-.8c-1-.8-2.5-2-4.3-3.7c-3.6-3.3-8.5-8.1-13.3-14.3c-5.5-7-10.7-15.4-14.2-24.7c24.9-29 39.6-64.7 39.6-103.4c0-92.8-84.9-168.9-192.6-175.5c.4 5.1 .6 10.3 .6 15.5z"/>
         </svg>
         <h3>Before we start chatting</h3>
@@ -1926,6 +2141,16 @@ async function initializeChatWidget() {
     .saicf-live-cta-btn:active:not(.is-disabled) {
       background: ${liveCtaColors.activeBg} !important;
       border-color: ${liveCtaColors.activeBg} !important;
+    }
+    /* Product gallery: the "View" CTA text and the scroll-arrow hover state
+       pick up the bot's configured theme colour. */
+    .ub-pc-cta {
+      color: ${themeColor};
+    }
+    .ub-pc-arrow:hover {
+      background: ${themeColor};
+      color: #fff;
+      border-color: ${themeColor};
     }
   `;
   shadowRoot.appendChild(dynamicStyleEl);
@@ -3763,6 +3988,7 @@ function toggleMenu(open) {
     doPositioning();
 
     let currentBotMessage = '';
+    let currentBotProducts = null;
     resetStreamingBotMessage();
 
     const url =
@@ -3827,10 +4053,29 @@ function toggleMenu(open) {
         updateStreamingBotMessage(currentBotMessage);
       };
 
+      // Structured product cards ride a dedicated SSE event so the text stream
+      // stays pure markdown. They normally arrive after the answer text; attach
+      // them to the current bot reply so the gallery renders under the text.
+      es.addEventListener('products', ({ data }) => {
+        try {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed.products) && parsed.products.length > 0) {
+            currentBotProducts = parsed.products;
+            attachProductsToStreamingRow(currentBotProducts);
+          }
+        } catch (err) {
+          console.warn('Could not parse products event:', err);
+        }
+      });
+
       es.addEventListener('end', () => {
         if (!hasError) {
           if (currentBotMessage) {
             updateStreamingBotMessage(currentBotMessage);
+          } else if (streamingBotRow && currentBotProducts) {
+            // Products-only reply: drop the empty text bubble, keep the gallery.
+            const emptyBubble = streamingBotRow.querySelector('.widget-bot-message');
+            if (emptyBubble && !emptyBubble.textContent.trim()) emptyBubble.remove();
           } else {
             // No bot content — remove streaming placeholder without creating an empty bubble
             resetStreamingBotMessage();
@@ -3897,6 +4142,230 @@ function toggleMenu(open) {
         }
       };
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // In-chat product gallery (vanilla port of the portal's ProductCarousel.js).
+  // Reads the card shape produced by the backend
+  // (src/controller/products.py _product_card_from_product): title, price,
+  // currency, image_url, url, availability, attributes — and never assumes any
+  // specific attribute keys, so it works for any kind of product.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const PC_ICON_CHEVRON_LEFT =
+    '<svg viewBox="0 0 320 512" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l192 192c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 246.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-192 192z"/></svg>';
+  const PC_ICON_CHEVRON_RIGHT =
+    '<svg viewBox="0 0 320 512" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"/></svg>';
+  const PC_ICON_BOX =
+    '<svg viewBox="0 0 448 512" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M50.7 58.5 0 160l208 0 0-128L93.7 32C75.5 32 58.9 42.3 50.7 58.5zM240 32l0 128 208 0L397.3 58.5C389.1 42.3 372.5 32 354.3 32L240 32zM448 192L0 192 0 416c0 35.3 28.7 64 64 64l320 0c35.3 0 64-28.7 64-64l0-224z"/></svg>';
+  const PC_ICON_EXTLINK =
+    '<svg viewBox="0 0 512 512" width="9" height="9" aria-hidden="true"><path fill="currentColor" d="M352 0c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9L370.7 96 201.4 265.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L416 141.3l41.4 41.4c9.2 9.2 22.9 11.9 34.9 6.9s19.8-16.6 19.8-29.6l0-128c0-17.7-14.3-32-32-32L352 0zM80 32C35.8 32 0 67.8 0 112L0 432c0 44.2 35.8 80 80 80l320 0c44.2 0 80-35.8 80-80l0-112c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 112c0 8.8-7.2 16-16 16L80 448c-8.8 0-16-7.2-16-16l0-320c0-8.8 7.2-16 16-16l112 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L80 32z"/></svg>';
+
+  function pcFormatPrice(price, currency) {
+    if (price === null || price === undefined || price === '') return null;
+    const num = typeof price === 'number' ? price : parseFloat(price);
+    if (Number.isNaN(num)) return null;
+    const hasCents = Math.abs(num % 1) > 0.001;
+    const formatted = num.toLocaleString(undefined, {
+      minimumFractionDigits: hasCents ? 2 : 0,
+      maximumFractionDigits: 2,
+    });
+    return currency ? `${formatted} ${currency}` : formatted;
+  }
+
+  // "storage_gb" -> "storage", "frame_size_cm" -> "frame size".
+  function pcPrettifyKey(k) {
+    return String(k)
+      .replace(/_(gb|tb|mb|mah|kg|g|cm|mm|inch|in|km|l|ml|ohm|bar|w|hz|mp|px)$/i, '')
+      .replace(/_/g, ' ')
+      .trim();
+  }
+
+  // A short, generic spec line: the first few attributes that aren't the brand
+  // (shown separately) or redundant with the title.
+  function pcBuildSpecs(attributes) {
+    if (!attributes || typeof attributes !== 'object') return [];
+    const skip = new Set(['brand', 'title', 'name', 'product_name']);
+    return Object.entries(attributes)
+      .filter(([k, v]) => !skip.has(String(k).toLowerCase()) && v !== null && v !== '' && v !== undefined)
+      .slice(0, 3)
+      .map(([k, v]) => `${pcPrettifyKey(k)} ${v}`.trim());
+  }
+
+  const PC_AVAILABILITY = {
+    in_stock: 'In stock',
+    out_of_stock: 'Out of stock',
+    partially_out_of_stock: 'Limited availability',
+    backorder: 'On backorder',
+    on_backorder: 'On backorder',
+  };
+
+  // Map a raw availability enum to a friendly badge label; humanize anything
+  // unrecognized so the badge never shows a raw machine enum.
+  function pcFormatAvailability(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const norm = String(value).trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (PC_AVAILABILITY[norm]) return PC_AVAILABILITY[norm];
+    return String(value)
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (ch) => ch.toUpperCase())
+      .trim();
+  }
+
+  function pcBuildCard(product) {
+    const href = product.url || product.product_url || null;
+    const card = document.createElement(href ? 'a' : 'div');
+    card.className = `ub-pc-card${href ? ' ub-pc-card-link' : ''}`;
+    if (href) {
+      card.href = href;
+      card.target = '_blank';
+      card.rel = 'noopener noreferrer';
+    }
+
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'ub-pc-img';
+    if (product.image_url) {
+      const img = document.createElement('img');
+      img.src = product.image_url;
+      img.alt = product.title || '';
+      img.loading = 'lazy';
+      img.addEventListener('error', () => {
+        if (img.parentNode === imgWrap) {
+          const fb = document.createElement('div');
+          fb.className = 'ub-pc-img-fallback';
+          fb.innerHTML = PC_ICON_BOX;
+          imgWrap.replaceChild(fb, img);
+        }
+      });
+      imgWrap.appendChild(img);
+    } else {
+      const fb = document.createElement('div');
+      fb.className = 'ub-pc-img-fallback';
+      fb.innerHTML = PC_ICON_BOX;
+      imgWrap.appendChild(fb);
+    }
+    const availability = pcFormatAvailability(product.availability);
+    if (availability) {
+      const badge = document.createElement('span');
+      badge.className = 'ub-pc-badge';
+      badge.textContent = availability;
+      imgWrap.appendChild(badge);
+    }
+    card.appendChild(imgWrap);
+
+    const body = document.createElement('div');
+    body.className = 'ub-pc-body';
+
+    const brand = product.attributes && product.attributes.brand;
+    if (brand) {
+      const b = document.createElement('span');
+      b.className = 'ub-pc-brand';
+      b.textContent = brand;
+      body.appendChild(b);
+    }
+
+    const title = document.createElement('span');
+    title.className = 'ub-pc-title';
+    title.textContent = product.title || 'Product';
+    body.appendChild(title);
+
+    const specs = pcBuildSpecs(product.attributes);
+    if (specs.length > 0) {
+      const s = document.createElement('span');
+      s.className = 'ub-pc-specs';
+      s.textContent = specs.join(' · ');
+      body.appendChild(s);
+    }
+
+    const foot = document.createElement('div');
+    foot.className = 'ub-pc-foot';
+    const price = pcFormatPrice(product.price, product.currency);
+    if (price) {
+      const p = document.createElement('span');
+      p.className = 'ub-pc-price';
+      p.textContent = price;
+      foot.appendChild(p);
+    }
+    if (href) {
+      const cta = document.createElement('span');
+      cta.className = 'ub-pc-cta';
+      cta.appendChild(document.createTextNode('View'));
+      const ic = document.createElement('span');
+      ic.className = 'ub-pc-cta-ic';
+      ic.innerHTML = PC_ICON_EXTLINK;
+      cta.appendChild(ic);
+      foot.appendChild(cta);
+    }
+    body.appendChild(foot);
+    card.appendChild(body);
+
+    return card;
+  }
+
+  function buildProductCarousel(products) {
+    if (!Array.isArray(products) || products.length === 0) return null;
+
+    const root = document.createElement('div');
+    root.className = 'ub-pc';
+
+    const leftBtn = document.createElement('button');
+    leftBtn.type = 'button';
+    leftBtn.className = 'ub-pc-arrow ub-pc-arrow-l ub-pc-arrow-off';
+    leftBtn.setAttribute('aria-label', 'Scroll left');
+    leftBtn.innerHTML = PC_ICON_CHEVRON_LEFT;
+
+    const track = document.createElement('div');
+    track.className = 'ub-pc-track';
+    products.forEach((p) => track.appendChild(pcBuildCard(p)));
+
+    const rightBtn = document.createElement('button');
+    rightBtn.type = 'button';
+    rightBtn.className = 'ub-pc-arrow ub-pc-arrow-r ub-pc-arrow-off';
+    rightBtn.setAttribute('aria-label', 'Scroll right');
+    rightBtn.innerHTML = PC_ICON_CHEVRON_RIGHT;
+
+    const refresh = () => {
+      const canLeft = track.scrollLeft > 4;
+      const canRight = track.scrollLeft + track.clientWidth < track.scrollWidth - 4;
+      leftBtn.classList.toggle('ub-pc-arrow-off', !canLeft);
+      rightBtn.classList.toggle('ub-pc-arrow-off', !canRight);
+    };
+    const scroll = (dir) => {
+      const amount = Math.max(track.clientWidth * 0.8, 220);
+      track.scrollBy({ left: dir * amount, behavior: 'smooth' });
+    };
+
+    leftBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); scroll(-1); });
+    rightBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); scroll(1); });
+    track.addEventListener('scroll', refresh, { passive: true });
+    // Re-evaluate once laid out and again as images settle (width can change).
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(refresh);
+    setTimeout(refresh, 300);
+    track.querySelectorAll('img').forEach((img) => img.addEventListener('load', refresh));
+
+    root.appendChild(leftBtn);
+    root.appendChild(track);
+    root.appendChild(rightBtn);
+    return root;
+  }
+
+  // Attach (or replace) the product gallery on a bot message row, beneath the
+  // text bubble. Stores the raw cards on the row so saveChatHistory can persist
+  // them and a reload can rebuild the gallery.
+  function attachProductsToRow(row, products) {
+    if (!row || !Array.isArray(products) || products.length === 0) return;
+    const existing = row.querySelector('.ub-pc-inline');
+    if (existing) existing.remove();
+    const carousel = buildProductCarousel(products);
+    if (!carousel) return;
+    const inline = document.createElement('div');
+    inline.className = 'ub-pc-inline';
+    if (row.querySelector('.saicf-message-avatar')) {
+      inline.classList.add('ub-pc-inline--indent');
+    }
+    inline.appendChild(carousel);
+    try { row.dataset.products = JSON.stringify(products); } catch {}
+    row.appendChild(inline);
   }
 
   function createMessageRow(text, sender, options = {}) {
@@ -3973,6 +4442,19 @@ function toggleMenu(open) {
     updateScrollDownVisibility();
   }
 
+  // Render the product gallery (from the `products` SSE event) beneath the
+  // in-flight bot reply. Ensures a bot row exists even if the gallery arrives
+  // before any text chunk.
+  function attachProductsToStreamingRow(products) {
+    ensureStreamingBotBubble();
+    if (!streamingBotRow) return;
+    attachProductsToRow(streamingBotRow, products);
+    if (spacerActive && !programmaticScroll && !userScrolledAway) {
+      recalcSpacer();
+    }
+    updateScrollDownVisibility();
+  }
+
   function scrollToBottom() {
     chatBody.scrollTop = chatBody.scrollHeight;
   }
@@ -4025,11 +4507,16 @@ function toggleMenu(open) {
       if (el.classList.contains('saicf-loading-row')) return;
       if (el.classList.contains('saicf-message-row')) {
         const bubble = el.querySelector('.saicf-widget-message');
-        items.push({
+        const item = {
           kind: 'message',
           text: bubble ? bubble.innerHTML : '',
           sender: el.dataset.sender,
-        });
+        };
+        // Persist the product gallery (if any) so it survives a reload.
+        if (el.dataset.products) {
+          try { item.products = JSON.parse(el.dataset.products); } catch {}
+        }
+        items.push(item);
       } else if (el.classList.contains('saicf-system-notice')) {
         // Skip ephemeral "waiting for agent" notices — they have a Cancel
         // button and shouldn't survive a reload (the request itself was
@@ -4093,8 +4580,7 @@ function toggleMenu(open) {
           row.appendChild(avatarEl);
         }
 
-        const bubble = document.createElement('div');
-        bubble.className = `saicf-widget-message widget-${msg.sender}-message`;
+        const hasProducts = Array.isArray(msg.products) && msg.products.length > 0;
 
         // Set the HTML directly - it's already processed. W5: run it
         // through DOMPurify as a second line of defence in case a prior
@@ -4103,16 +4589,27 @@ function toggleMenu(open) {
         // finished its dynamic import yet, degrade to textContent rather
         // than assigning raw HTML (that would re-open the XSS hole).
         if (msg.text) {
+          const bubble = document.createElement('div');
+          bubble.className = `saicf-widget-message widget-${msg.sender}-message`;
           if (typeof DOMPurify !== 'undefined') {
             bubble.innerHTML = DOMPurify.sanitize(msg.text, { ADD_ATTR: ['target', 'rel'] });
           } else {
             bubble.textContent = msg.text;
           }
-        } else {
+          row.appendChild(bubble);
+        } else if (!hasProducts) {
+          // Empty text and no gallery — keep the legacy placeholder bubble.
+          const bubble = document.createElement('div');
+          bubble.className = `saicf-widget-message widget-${msg.sender}-message`;
           bubble.textContent = '(empty message)';
+          row.appendChild(bubble);
+        }
+        // else: products-only reply, no text bubble — just the gallery below.
+
+        if (hasProducts) {
+          attachProductsToRow(row, msg.products);
         }
 
-        row.appendChild(bubble);
         chatBody.insertBefore(row, bottomSpacerEl);
       });
 
