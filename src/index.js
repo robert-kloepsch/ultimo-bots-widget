@@ -365,6 +365,39 @@ async function initializeChatWidget() {
     .pulsing {
       animation: pulse 2s infinite;
     }
+    /* Launcher faces: the normal face and the close chevron are stacked
+       and cross-rotate when .saicf-icon-open is toggled (desktop only —
+       on mobile the launcher is hidden while the chat is open). */
+    .saicf-icon-face {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .saicf-icon-close {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      transform: rotate(-90deg);
+      pointer-events: none;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .saicf-chat-widget-icon.saicf-icon-open {
+      animation: none; /* pause .pulsing while showing the close face */
+    }
+    .saicf-chat-widget-icon.saicf-icon-open .saicf-icon-face {
+      opacity: 0;
+      transform: rotate(90deg);
+    }
+    .saicf-chat-widget-icon.saicf-icon-open .saicf-icon-close {
+      opacity: 1;
+      transform: rotate(0deg);
+    }
     .saicf-chat-title {
       font-size: 15px;
       font-weight: 700;
@@ -382,13 +415,15 @@ async function initializeChatWidget() {
       display: flex !important;
       flex-direction: column;
       z-index: 2147483647 !important;
+      /* Desktop: fade in, in place above the launcher — no slide.
+         (Mobile has its own fullscreen slide-up in the max-width media
+         query, with !important.) 0.3s fits inside closeChat()'s 300ms
+         display:none timeout so the fade-out isn't cut off. */
       opacity: 0;
-      transform: translateY(100%);
-      transition: opacity 0.5s ease, transform 0.5s ease;
+      transition: opacity 0.3s ease;
     }
     .saicf-chat-window.show {
       opacity: 1;
-      transform: translateY(0);
     }
     .hidden {
       display: none !important;
@@ -472,7 +507,7 @@ async function initializeChatWidget() {
       font-size: 1.6rem;   /* or whatever looks right */
     }
     .saicf-close-chat-widget-icon:hover {
-      transform: scale(1.2);
+      transform: scale(1.05);
     }
     .saicf-chat-body-wrapper {
       position: relative;
@@ -1132,7 +1167,7 @@ async function initializeChatWidget() {
       transition: background-color .2s ease, transform .2s ease;
       font-size: 20px;
     }
-    .saicf-ellipsis-btn:hover { transform: scale(1.08); }
+    .saicf-ellipsis-btn:hover { transform: scale(1.05); }
     .saicf-ellipsis-btn svg { width: 1.4em; height: 1.4em; display: block; }
 
     .saicf-menu {
@@ -1182,10 +1217,25 @@ async function initializeChatWidget() {
     .saicf-menu-item { white-space: nowrap; }
 
     @media (min-width: 769px) {
+      /* Desktop: the chat window opens ABOVE the launcher icon (which
+         stays visible and flips to a close chevron). bottom = icon
+         offset (20px) + icon size + 12px gap; height leaves 12px of
+         headroom at the top of the viewport. */
       .saicf-chat-window {
+        right: 20px;
+        bottom: calc(32px + var(--widget-size));
         width: min(430px, calc(100svw - 24px));
-        height: min(620px, calc(100svh - 24px));
-        max-height: calc(100svh - 24px);
+        height: min(620px, calc(100svh - 44px - var(--widget-size)));
+        max-height: calc(100svh - 44px - var(--widget-size));
+      }
+      .saicf-chat-window.align-left {
+        left: 25px !important;
+      }
+      /* Elevated launcher sits at bottom: 70px — keep the window above it. */
+      .saicf-chat-window.elevated {
+        bottom: calc(82px + var(--widget-size)) !important;
+        height: min(620px, calc(100svh - 94px - var(--widget-size)));
+        max-height: calc(100svh - 94px - var(--widget-size));
       }
     }
 
@@ -1195,17 +1245,32 @@ async function initializeChatWidget() {
         display: none !important;
       }
 
-      /* Fullscreen chat window (slides up when .show is added) */
+      /* Fullscreen chat window (slides up when .show is added).
+         --saicf-kb is the iOS on-screen keyboard overlap (set from
+         visualViewport in JS): it lifts the footer/input above the
+         keyboard while the window itself keeps covering the FULL layout
+         viewport. Do not shrink the window's height instead — that
+         leaves the strip behind the keyboard/URL bar uncovered and the
+         host page shows through. */
       .saicf-chat-window {
         position: fixed !important;
         inset: 0 !important;
         width: 100% !important;
         height: 100% !important;
+        padding-bottom: var(--saicf-kb, 0px) !important;
         border-radius: 0 !important;
         background: #ffffff !important;
         opacity: 0 !important;
-        transform: translateY(100%) !important;
-        transition: opacity 0.75s ease, transform 0.75s ease !important;
+        /* Fade in like desktop — no slide-up. This rule's display:flex
+           !important outranks .hidden (later in the sheet), so the
+           fullscreen window is ALWAYS rendered on mobile; without the
+           old off-screen translateY it would invisibly cover the page
+           and swallow the tap on the launcher. visibility +
+           pointer-events keep it inert until .show; the delayed
+           visibility flip lets the 0.3s fade-out finish. */
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transition: opacity 0.3s ease, visibility 0s linear 0.3s !important;
         display: flex !important;
         flex-direction: column !important;
       }
@@ -1213,7 +1278,9 @@ async function initializeChatWidget() {
       /* When opened */
       .saicf-chat-window.show {
         opacity: 1 !important;
-        transform: none !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transition: opacity 0.3s ease !important;
       }
 
       /* Internal pieces tuned for fullscreen */
@@ -1410,6 +1477,15 @@ async function initializeChatWidget() {
       border-top-color: #fff;
       border-radius: 50%;
       animation: saicf-spin 0.8s linear infinite;
+    }
+
+    /* Powered-by on the pre-chat screen — same markup/classes as the
+       chat-footer version; margin-top:auto pins it to the bottom of the
+       form column (scrolls with the form if the fields overflow). */
+    .saicf-pre-chat-container .saicf-powered-by {
+      margin-top: auto;
+      padding-top: 16px;
+      flex-shrink: 0;
     }
 
     @media (max-width: 768px) {
@@ -1866,20 +1942,35 @@ async function initializeChatWidget() {
   }
   if (icon) {
     chatWidgetIcon.innerHTML = `
-      <img
-        src="${icon}"
-        alt="Widget Icon"
-        style="max-width: 100%; max-height: 100%; border-radius: ${widgetBorderRadius}%;">
+      <div class="saicf-icon-face">
+        <img
+          src="${icon}"
+          alt="Widget Icon"
+          style="max-width: 100%; max-height: 100%; border-radius: ${widgetBorderRadius}%;">
+      </div>
     `;
   } else {
     chatWidgetIcon.innerHTML = `
+<div class="saicf-icon-face">
 <div style="display:flex; justify-content:center; align-items:center; background-color: transparent; padding-top: 3px">
   <svg xmlns="http://www.w3.org/2000/svg" width="65%" viewBox="0 0 24 24" fill="currentColor" class="size-6">
     <path fill-rule="evenodd" d="M12 2.25c-2.429 0-4.817.178-7.152.521C2.87 3.061 1.5 4.795 1.5 6.741v6.018c0 1.946 1.37 3.68 3.348 3.97.877.129 1.761.234 2.652.316V21a.75.75 0 0 0 1.28.53l4.184-4.183a.39.39 0 0 1 .266-.112c2.006-.05 3.982-.22 5.922-.506 1.978-.29 3.348-2.023 3.348-3.97V6.741c0-1.947-1.37-3.68-3.348-3.97A49.145 49.145 0 0 0 12 2.25ZM8.25 8.625a1.125 1.125 0 1 0 0 2.25 1.125 1.125 0 0 0 0-2.25Zm2.625 1.125a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Zm4.875-1.125a1.125 1.125 0 1 0 0 2.25 1.125 1.125 0 0 0 0-2.25Z" clip-rule="evenodd" />
   </svg>
 </div>
+</div>
 `;
   }
+  // Close-state face (desktop only): while the chat window is open the
+  // launcher stays visible below it, rotates to this chevron and acts
+  // as the close button (see .saicf-icon-open).
+  const iconCloseFace = document.createElement('div');
+  iconCloseFace.className = 'saicf-icon-close';
+  iconCloseFace.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="${headerFontColor}" style="width: 42%; height: 42%;">
+      <path d="M233.4 406.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L256 338.7 86.6 169.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z"/>
+    </svg>
+  `;
+  chatWidgetIcon.appendChild(iconCloseFace);
   // Unread-agent-message badge overlay on the minimized icon. Appended AFTER
   // the icon's innerHTML is set so it isn't overwritten.
   const unreadBadge = document.createElement('div');
@@ -1984,6 +2075,7 @@ async function initializeChatWidget() {
       </div>
       <div class="saicf-pre-chat-fields"></div>
       <button class="saicf-pre-chat-submit" disabled>Start Chat</button>
+      ${poweredByHTML}
     </div>
     <div class="saicf-chat-body hidden"></div>
     <div class="saicf-chat-footer hidden">
@@ -2071,11 +2163,16 @@ async function initializeChatWidget() {
       chatWindow.classList.remove('hidden');
       forceReflow(chatWindow);
       chatWindow.classList.add('show');
-      chatWidgetIcon.classList.add('hidden');
       chatOverlay.classList.remove('hidden');
 
       if (window.matchMedia('(max-width: 768px)').matches) {
+        // Mobile: fullscreen window, launcher hidden underneath.
+        chatWidgetIcon.classList.add('hidden');
         document.body.classList.add('no-scroll');
+      } else {
+        // Desktop: window opens above the launcher, which flips to a
+        // close chevron and acts as the close button.
+        chatWidgetIcon.classList.add('saicf-icon-open');
       }
 
       widgetOpenedOnce = true;
@@ -2102,6 +2199,12 @@ async function initializeChatWidget() {
 
   const dynamicStyleEl = document.createElement('style');
   dynamicStyleEl.textContent = `
+    /* While open, the launcher shows the chevron on the theme colour —
+       matters for custom image icons, which have no background of
+       their own (the image fades out in the open state). */
+    .saicf-chat-widget-icon.saicf-icon-open {
+      background-color: ${themeColor};
+    }
     .saicf-input-send-container button:hover {
       background-color: ${hoverColor} !important;
     }
@@ -2651,6 +2754,49 @@ function toggleMenu(open) {
     }
   });
   bodyResizeObserver.observe(chatBody);
+
+  // ── iOS on-screen keyboard fit ───────────────────────────────────
+  // iPhone Safari does NOT shrink the layout viewport when the keyboard
+  // opens — only the *visual* viewport shrinks. The fullscreen mobile
+  // chat window (position:fixed; height:100%) therefore keeps extending
+  // behind the keyboard, hiding the footer/input. Safari's native
+  // "scroll focused field into view" also mis-computes on the FIRST tap
+  // (it runs before the keyboard has settled), which is why a second
+  // tap used to bring the input back.
+  // Fix: measure the keyboard overlap from visualViewport and lift the
+  // window's content above it via --saicf-kb (padding-bottom in the
+  // mobile media query). The window itself stays fullscreen so its
+  // white background keeps covering the strip behind the keyboard/URL
+  // bar — shrinking the window instead let the host page show through.
+  const visualVP = window.visualViewport;
+  function applyViewportFit() {
+    if (!visualVP || !window.matchMedia('(max-width: 768px)').matches) return;
+    // Keyboard overlap = layout viewport height minus the visible part.
+    const kb = Math.max(0, window.innerHeight - visualVP.height - visualVP.offsetTop);
+    chatWindow.style.setProperty('--saicf-kb', kb + 'px');
+  }
+  function clearViewportFit() {
+    chatWindow.style.removeProperty('--saicf-kb');
+  }
+  if (visualVP) {
+    const onViewportChange = () => {
+      if (!chatWindow.classList.contains('show')) return;
+      applyViewportFit();
+      // The window just shrank/grew with the keyboard — keep the newest
+      // message visible while the visitor is typing.
+      const active = widgetRoot.getRootNode().activeElement;
+      if (active === chatInput) requestAnimationFrame(() => scrollToBottom());
+    };
+    visualVP.addEventListener('resize', onViewportChange);
+    visualVP.addEventListener('scroll', onViewportChange);
+
+    // First-tap safety net: iOS occasionally settles the keyboard
+    // without a (timely) resize event. Re-fit shortly after focus so
+    // the very first tap into the input never leaves it hidden.
+    chatInput.addEventListener('focus', () => {
+      [300, 800].forEach(ms => setTimeout(onViewportChange, ms));
+    });
+  }
 
   // Handle scroll positioning for incoming live content (agent messages,
   // system notices). Simple scroll-to-bottom like standard chat apps.
@@ -3726,6 +3872,12 @@ function toggleMenu(open) {
   });
 
   chatWidgetIcon.addEventListener('click', async () => {
+    // Desktop: the launcher stays visible while the chat is open and
+    // acts as the close button (it shows the chevron face then).
+    if (chatWindow.classList.contains('show')) {
+      closeChat();
+      return;
+    }
     // Only load chat history if pre-chat is completed or not required
     if (!requirePreChat || preChatCompleted) {
       if (chatBody.querySelectorAll('.saicf-message-row').length === 0) {
@@ -3739,10 +3891,15 @@ function toggleMenu(open) {
     chatWindow.classList.remove('hidden');
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
-    chatWidgetIcon.classList.add('hidden');
     chatOverlay.classList.remove('hidden');
     if (window.matchMedia('(max-width: 768px)').matches) {
+      // Mobile: fullscreen window, launcher hidden underneath.
+      chatWidgetIcon.classList.add('hidden');
       document.body.classList.add('no-scroll');
+    } else {
+      // Desktop: window opens above the launcher, which flips to a
+      // close chevron and acts as the close button.
+      chatWidgetIcon.classList.add('saicf-icon-open');
     }
     widgetOpenedOnce = true;
     markPopUpSeen();
@@ -3905,10 +4062,15 @@ function toggleMenu(open) {
   function closeChat() {
     chatWindow.classList.remove('show');
     chatWidgetIcon.classList.remove('hidden');
+    chatWidgetIcon.classList.remove('saicf-icon-open');
     chatOverlay.classList.add('hidden');
     if (window.matchMedia('(max-width: 768px)').matches) {
       document.body.classList.remove('no-scroll');
     }
+    // Drop the keyboard-fit vars: if the chat is closed while the
+    // keyboard is open, the closing resize event is ignored (no .show)
+    // and a stale shrunken height would stick until the next reopen.
+    clearViewportFit();
     setTimeout(() => chatWindow.classList.add('hidden'), 300);
   }
 
