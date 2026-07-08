@@ -411,6 +411,10 @@ async function initializeChatWidget() {
       background-color: transparent;
       border: none;
       border-radius: 16px;
+      /* Clip children to the rounded corners — the footer/input row has
+         its own opaque background and would otherwise paint square
+         bottom corners over the radius. */
+      overflow: hidden;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
       display: flex !important;
       flex-direction: column;
@@ -1082,6 +1086,11 @@ async function initializeChatWidget() {
       white-space:nowrap;
       cursor:pointer;
       transition:background-color .25s,transform .2s;
+      /* Keep the chip on its own compositing layer permanently: the
+         hover translateY otherwise toggles the layer on/off, switching
+         text between subpixel and grayscale antialiasing — visible as a
+         dark "bold flash" when the mouse leaves. */
+      will-change: transform;
     }
     .saicf-predefined-question:hover{
       background: #f1f1f1ff;
