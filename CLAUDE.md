@@ -74,9 +74,37 @@ comments — backend contracts.
 
 ---
 
+## Product gallery + Shopify add-to-cart
+
+The in-chat product gallery (`ub-pc-*`, a vanilla port of the portal's
+`ProductCarousel.js`) renders the structured cards the backend attaches to a
+reply (SSE `products` event). Cards from a **Shopify-mirrored catalog** also
+carry a `variants` array (`[{id, title, options, available, price}]`, numeric
+ids) — the backend hydrates it only for `source='shopify'` (see
+`products._attach_variants_to_cards`), so on every other platform the gallery is
+unchanged.
+
+Those cards get a **buy button** (`pcBuildCard`): multiple variants → "Select
+options" opens a bottom sheet (`pcOpenVariantSheet`) with one `<select>` per
+option, live price/availability, and add-to-cart; a single variant → "Add to
+cart" adds directly (`pcDirectAdd`). Add-to-cart is `POST /cart/add.js`
+(`pcAddToCart`) — the **storefront AJAX Cart API**, which works because the
+widget runs inline in the Shadow DOM on the host page (NOT an iframe), so it is
+same-origin on a Shopify storefront and fills the shopper's real cart. Fallbacks:
+a Shopify cart that rejects the add (sold out) shows the message; a page with no
+Shopify cart (widget embedded elsewhere) opens the checkout **permalink**
+(`origin/cart/{variantId}:1`). The sheet is appended to `chatWindow`, never
+`document.body` (Shadow-DOM isolation).
+
+**Deliberately widget-only:** the hosted chat page
+([`../ultimo-bots-frontend/`](../ultimo-bots-frontend/), which reuses the portal's
+`ProductCarousel.js`) has NO storefront cart, so it keeps the plain "View" link.
+This is an intentional single-surface feature, not a sync gap — the 1:1 rule
+below is about the shared live-agent state machine, not every gallery affordance.
+
 ## Conventions — do not violate
 
-- **Keep `useLiveAgent.js` in sync.** Any change to the WS / heartbeat / polling / session-token logic here must be mirrored in [`../ultimo-bots-frontend/src/useLiveAgent.js`](../ultimo-bots-frontend/src/useLiveAgent.js). Same PR.
+- **Keep `useLiveAgent.js` in sync.** Any change to the WS / heartbeat / polling / session-token logic here must be mirrored in [`../ultimo-bots-frontend/src/useLiveAgent.js`](../ultimo-bots-frontend/src/useLiveAgent.js). Same PR. (The Shopify buy button touches NONE of that — it is not mirrored, by design.)
 - **Don't break Shadow DOM isolation.** Don't put styles in `document.head` (except the existing `body.no-scroll` snippet) or append elements to `document.body` directly.
 - **Keep the `saicf-` class prefix.** Renaming breaks every selector and any partner integration targeting the widget.
 - **Don't bundle `marked` / `DOMPurify`.** Intentionally CDN-loaded.

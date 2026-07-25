@@ -1759,10 +1759,179 @@ async function initializeChatWidget() {
       pointer-events: none;
     }
 
+    /* ── Buy button (Shopify-mirrored products only: cards that carry variants).
+       Colour comes from the theme via the dynamic block; this is the fallback. ── */
+    .ub-pc-buy-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 9px;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 10px;
+      background: #3a3550;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: filter 0.15s ease, opacity 0.15s ease;
+    }
+    .ub-pc-buy-btn:hover:not(:disabled) { filter: brightness(1.12); }
+    .ub-pc-buy-btn:disabled { opacity: 0.6; cursor: default; }
+    .ub-pc-buy-btn.ub-pc-buy-done { background: #1f9d55 !important; }
+
+    /* ── Variant sheet: bottom sheet INSIDE the chat window (Shadow-DOM safe,
+       never document.body). Backdrop + panel, Chatbase-style. ── */
+    .ub-pc-sheet-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      background: rgba(20, 20, 40, 0.45);
+      border-radius: 16px;
+      animation: ub-pc-sheet-fade 0.18s ease;
+    }
+    @keyframes ub-pc-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+    .ub-pc-sheet {
+      background: #ffffff;
+      border-radius: 16px 16px 16px 16px;
+      margin: 10px;
+      padding: 16px;
+      box-shadow: 0 -6px 24px rgba(20, 20, 40, 0.18);
+      animation: ub-pc-sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    @keyframes ub-pc-sheet-up {
+      from { transform: translateY(24px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .ub-pc-sheet-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .ub-pc-sheet-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.3;
+      color: #1a1a2e;
+    }
+    .ub-pc-sheet-close {
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 999px;
+      background: #f1f0f6;
+      color: #3a3550;
+      cursor: pointer;
+      padding: 0;
+    }
+    .ub-pc-sheet-close:hover { background: #e4e2ee; }
+    .ub-pc-sheet-field { margin-bottom: 10px; }
+    .ub-pc-sheet-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #8a86a0;
+      margin-bottom: 4px;
+    }
+    .ub-pc-sheet-select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 10px;
+      border: 1px solid #dcdae6;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #1a1a2e;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .ub-pc-sheet-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 12px 0 10px;
+    }
+    .ub-pc-sheet-total-label { font-size: 12.5px; color: #6f6b82; }
+    .ub-pc-sheet-price {
+      font-size: 16px;
+      font-weight: 700;
+      color: #15151f;
+      white-space: nowrap;
+    }
+    .ub-pc-sheet-status {
+      font-size: 12px;
+      line-height: 1.4;
+      color: #b3261e;
+      min-height: 15px;
+      margin-bottom: 6px;
+    }
+    .ub-pc-sheet-status.ub-pc-sheet-status-ok { color: #1f9d55; }
+    .ub-pc-sheet-add {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 11px 12px;
+      border: none;
+      border-radius: 12px;
+      background: #3a3550;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: filter 0.15s ease, opacity 0.15s ease, background 0.2s ease;
+    }
+    .ub-pc-sheet-add:hover:not(:disabled) { filter: brightness(1.12); }
+    .ub-pc-sheet-add:disabled { opacity: 0.55; cursor: default; }
+    .ub-pc-sheet-add.ub-pc-sheet-add-done { background: #1f9d55 !important; }
+    .ub-pc-sheet-cart-link {
+      display: block;
+      text-align: center;
+      margin-top: 9px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #3a3550;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .ub-pc-sheet-spin {
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      border: 2px solid rgba(255, 255, 255, 0.45);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: ub-pc-spin 0.7s linear infinite;
+    }
+    @keyframes ub-pc-spin { to { transform: rotate(360deg); } }
+
     @media (max-width: 768px) {
       .ub-pc-card { width: 158px; }
       /* On touch devices the arrows just get in the way — swipe instead. */
       .ub-pc-arrow { display: none; }
+      /* Fullscreen window has square corners — the sheet hugs the bottom. */
+      .ub-pc-sheet-overlay { border-radius: 0; }
+      .ub-pc-sheet { margin: 8px; }
     }
   `;
   shadowRoot.appendChild(styleTag);
@@ -2263,6 +2432,21 @@ async function initializeChatWidget() {
       background: ${themeColor};
       color: #fff;
       border-color: ${themeColor};
+    }
+    /* Buy button + variant sheet share the brand surface with the header. */
+    .ub-pc-buy-btn {
+      background: ${themeColor};
+      color: ${headerFontColor};
+    }
+    .ub-pc-sheet-add {
+      background: ${themeColor};
+      color: ${headerFontColor};
+    }
+    .ub-pc-sheet-cart-link { color: ${themeColor}; }
+    .ub-pc-sheet-select:focus {
+      outline: none;
+      border-color: ${themeColor};
+      box-shadow: 0 0 0 3px ${themeColor}22;
     }
   `;
   shadowRoot.appendChild(dynamicStyleEl);
@@ -4383,6 +4567,336 @@ function toggleMenu(open) {
       .trim();
   }
 
+  /**********************************************************
+   * Variant picker + storefront add-to-cart ("Select options",
+   * the Chatbase pattern). Only cards that carry a `variants`
+   * array get the button — the backend attaches it exclusively
+   * for Shopify-mirrored catalogs, so on every other platform
+   * the gallery renders exactly as before. The widget runs
+   * inline on the host page (Shadow DOM, no iframe), so on a
+   * Shopify storefront POST /cart/add.js is same-origin and
+   * fills the shopper's REAL cart. Deliberately widget-only:
+   * the hosted chat page has no storefront cart (see
+   * ultimo-bots-frontend — no counterpart there by design).
+   **********************************************************/
+
+  const PC_ICON_CLOSE =
+    '<svg viewBox="0 0 384 512" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg>';
+  const PC_ICON_CART =
+    '<svg viewBox="0 0 576 512" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M0 24C0 10.7 10.7 0 24 0L69.5 0c22 0 41.5 12.8 50.6 32l411 0c26.3 0 45.5 25 38.6 50.4l-41 152.3c-8.5 31.4-37 53.3-69.5 53.3l-288.5 0 5.4 28.5c2.2 11.3 12.1 19.5 23.6 19.5L488 336c13.3 0 24 10.7 24 24s-10.7 24-24 24l-288.3 0c-34.6 0-64.3-24.6-70.7-58.5L77.4 54.5c-.7-3.8-4-6.5-7.9-6.5L24 48C10.7 48 0 37.3 0 24zM128 464a48 48 0 1 1 96 0 48 48 0 1 1 -96 0zm336-48a48 48 0 1 1 0 96 48 48 0 1 1 0-96z"/></svg>';
+
+  // A variant id is only ever used if it is purely numeric — it gets embedded
+  // into /cart/add.js payloads and cart permalink URLs.
+  function pcValidVariants(product) {
+    if (!Array.isArray(product && product.variants)) return [];
+    return product.variants.filter(
+      (v) => v && typeof v === 'object' && /^\d+$/.test(String(v.id || ''))
+    );
+  }
+
+  // Ordered option names across all variants (first-seen order), and the
+  // deduped value list per name. Variants without options (Shopify's single
+  // "Default Title") yield no selectable fields.
+  function pcOptionModel(variants) {
+    const names = [];
+    const values = {};
+    variants.forEach((v) => {
+      Object.entries(v.options || {}).forEach(([name, value]) => {
+        if (value === null || value === undefined || value === '') return;
+        if (!values[name]) {
+          names.push(name);
+          values[name] = [];
+        }
+        const s = String(value);
+        if (!values[name].includes(s)) values[name].push(s);
+      });
+    });
+    return { names, values };
+  }
+
+  // The variant matching a full selection {optionName: value}, exact on every
+  // selected name (case-insensitive on the value), or null.
+  function pcResolveVariant(variants, selection) {
+    const want = Object.entries(selection).map(([k, v]) => [k, String(v).toLowerCase()]);
+    return (
+      variants.find((v) => {
+        const opts = v.options || {};
+        return want.every(([k, val]) => String(opts[k] || '').toLowerCase() === val);
+      }) || null
+    );
+  }
+
+  /* Add one variant to the storefront cart. Resolves to:
+   *   { ok: true }                     — in the cart (same-origin AJAX Cart API)
+   *   { ok: false, message }          — a Shopify storefront answered with an
+   *                                     error (e.g. just sold out): show it,
+   *                                     do NOT open another surface
+   *   { ok: false, fallback: true }   — no Shopify cart here (widget embedded
+   *                                     on a non-Shopify page): the caller
+   *                                     opens the checkout permalink instead */
+  async function pcAddToCart(variantId) {
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
+    try {
+      const resp = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ items: [{ id: Number(variantId), quantity: 1 }] }),
+        signal: controller ? controller.signal : undefined,
+      });
+      if (resp.ok) return { ok: true };
+      let data = null;
+      try { data = await resp.json(); } catch { /* non-JSON -> not a cart API */ }
+      if (data && (data.description || data.message)) {
+        // A real Shopify cart rejected the add (sold out, limits, ...).
+        return { ok: false, message: String(data.description || data.message).slice(0, 200) };
+      }
+      return { ok: false, fallback: true };   // 404/HTML: no storefront cart here
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        // The request may still land server-side — never auto-open a checkout
+        // permalink here (it REPLACES the cart and could race the slow add).
+        return { ok: false, message: 'The cart is not responding right now. Please try again.' };
+      }
+      return { ok: false, fallback: true };   // network error: no storefront cart here
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  // The buy-anywhere fallback: Shopify's cart permalink on the store's own
+  // domain (taken from the product URL). Opens the checkout in a new tab.
+  function pcCheckoutPermalink(product, variantId) {
+    try {
+      const origin = new URL(product.url || product.product_url).origin;
+      return `${origin}/cart/${variantId}:1`;
+    } catch {
+      return null;
+    }
+  }
+
+  function pcCloseVariantSheet() {
+    const open = chatWindow.querySelector('.ub-pc-sheet-overlay');
+    if (open) open.remove();
+  }
+
+  // The bottom sheet: one select per option, live price/availability, add to
+  // cart. Appended INSIDE the chat window (Shadow-DOM convention: never
+  // document.body). All data lands in the DOM via textContent — card fields
+  // come from the backend but are treated as untrusted anyway.
+  function pcOpenVariantSheet(product) {
+    const variants = pcValidVariants(product);
+    if (variants.length === 0) return;
+    pcCloseVariantSheet();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'ub-pc-sheet-overlay';
+
+    const sheet = document.createElement('div');
+    sheet.className = 'ub-pc-sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+
+    const head = document.createElement('div');
+    head.className = 'ub-pc-sheet-head';
+    const title = document.createElement('div');
+    title.className = 'ub-pc-sheet-title';
+    title.textContent = product.title || 'Select options';
+    head.appendChild(title);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'ub-pc-sheet-close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = PC_ICON_CLOSE;
+    head.appendChild(closeBtn);
+    sheet.appendChild(head);
+
+    const model = pcOptionModel(variants);
+    const selection = {};
+    const selects = [];
+    model.names.forEach((name) => {
+      const field = document.createElement('div');
+      field.className = 'ub-pc-sheet-field';
+      const label = document.createElement('label');
+      label.className = 'ub-pc-sheet-label';
+      label.textContent = name;
+      field.appendChild(label);
+      const select = document.createElement('select');
+      select.className = 'ub-pc-sheet-select';
+      select.setAttribute('aria-label', name);
+      model.values[name].forEach((value) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        select.appendChild(opt);
+      });
+      selection[name] = model.values[name][0];
+      select.addEventListener('change', () => {
+        selection[name] = select.value;
+        refresh();
+      });
+      field.appendChild(select);
+      selects.push(select);
+      sheet.appendChild(field);
+    });
+
+    const row = document.createElement('div');
+    row.className = 'ub-pc-sheet-row';
+    const totalLabel = document.createElement('span');
+    totalLabel.className = 'ub-pc-sheet-total-label';
+    totalLabel.textContent = 'Total';
+    const priceEl = document.createElement('span');
+    priceEl.className = 'ub-pc-sheet-price';
+    row.appendChild(totalLabel);
+    row.appendChild(priceEl);
+    sheet.appendChild(row);
+
+    const status = document.createElement('div');
+    status.className = 'ub-pc-sheet-status';
+    sheet.appendChild(status);
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'ub-pc-sheet-add';
+    sheet.appendChild(addBtn);
+
+    const setAddLabel = (text, { spinner = false, cart = true } = {}) => {
+      addBtn.textContent = '';
+      if (spinner) {
+        const spin = document.createElement('span');
+        spin.className = 'ub-pc-sheet-spin';
+        spin.setAttribute('aria-hidden', 'true');
+        addBtn.appendChild(spin);
+      } else if (cart) {
+        const ic = document.createElement('span');
+        ic.innerHTML = PC_ICON_CART;
+        ic.setAttribute('aria-hidden', 'true');
+        addBtn.appendChild(ic);
+      }
+      addBtn.appendChild(document.createTextNode(text));
+    };
+
+    let resolved = null;
+    // Function declaration (hoisted) — the option <select> change handlers above
+    // close over it before this line runs; they only fire on user interaction, so
+    // the binding is always defined by then, but hoisting removes any doubt.
+    function refresh() {
+      resolved = pcResolveVariant(variants, selection);
+      const price = resolved && resolved.price !== undefined && resolved.price !== null
+        ? resolved.price
+        : product.price;
+      priceEl.textContent = pcFormatPrice(price, product.currency) || '';
+      status.classList.remove('ub-pc-sheet-status-ok');
+      if (!resolved) {
+        status.textContent = 'This combination is not available.';
+        setAddLabel('Add to cart');
+        addBtn.disabled = true;
+      } else if (resolved.available === false) {
+        status.textContent = 'Out of stock in this option.';
+        setAddLabel('Out of stock', { cart: false });
+        addBtn.disabled = true;
+      } else {
+        status.textContent = '';
+        setAddLabel('Add to cart');
+        addBtn.disabled = false;
+      }
+    }
+    refresh();
+
+    let busy = false;
+    addBtn.addEventListener('click', async () => {
+      if (busy || !resolved || resolved.available === false) return;
+      busy = true;
+      addBtn.disabled = true;
+      selects.forEach((s) => { s.disabled = true; });
+      setAddLabel('Adding to cart', { spinner: true });
+      const result = await pcAddToCart(resolved.id);
+      busy = false;
+      selects.forEach((s) => { s.disabled = false; });
+      if (result.ok) {
+        addBtn.classList.add('ub-pc-sheet-add-done');
+        setAddLabel('Added to cart', { cart: false });
+        status.classList.add('ub-pc-sheet-status-ok');
+        status.textContent = 'It is waiting in your cart.';
+        if (!sheet.querySelector('.ub-pc-sheet-cart-link')) {
+          const cartLink = document.createElement('a');
+          cartLink.className = 'ub-pc-sheet-cart-link';
+          cartLink.href = `${window.location.origin}/cart`;
+          cartLink.textContent = 'View cart';
+          sheet.appendChild(cartLink);
+        }
+        return;
+      }
+      if (result.fallback) {
+        const permalink = pcCheckoutPermalink(product, resolved.id);
+        if (permalink) {
+          window.open(permalink, '_blank', 'noopener,noreferrer');
+          status.classList.add('ub-pc-sheet-status-ok');
+          status.textContent = 'Checkout opened in a new tab.';
+          setAddLabel('Open checkout again');
+          addBtn.disabled = false;
+          return;
+        }
+        status.textContent = 'Could not add this to the cart. Please open the product page.';
+        setAddLabel('Add to cart');
+        addBtn.disabled = false;
+        return;
+      }
+      status.textContent = result.message || 'Could not add this to the cart. Please try again.';
+      setAddLabel('Add to cart');
+      addBtn.disabled = false;
+    });
+
+    function close() {
+      overlay.remove();
+      chatWindow.removeEventListener('keydown', onKeydown, true);
+    }
+    function onKeydown(e) {
+      if (e.key === 'Escape') close();
+    }
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    chatWindow.addEventListener('keydown', onKeydown, true);
+
+    overlay.appendChild(sheet);
+    chatWindow.appendChild(overlay);
+    if (selects.length > 0) selects[0].focus();
+    else addBtn.focus();
+    // Lets a caller surface a message in the freshly-opened sheet (the
+    // direct-add path forwarding a storefront rejection).
+    return { showMessage: (text) => { status.textContent = text; } };
+  }
+
+  // Single-variant products skip the sheet: one click adds straight to the
+  // cart, with the same fallback rules, states shown inline on the button.
+  async function pcDirectAdd(product, variant, btn) {
+    if (btn.dataset.busy === '1' || btn.classList.contains('ub-pc-buy-done')) return;
+    btn.dataset.busy = '1';
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+    const result = await pcAddToCart(variant.id);
+    delete btn.dataset.busy;
+    if (result.ok) {
+      btn.classList.add('ub-pc-buy-done');
+      btn.textContent = 'Added to cart';
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = original;
+    if (result.fallback) {
+      const permalink = pcCheckoutPermalink(product, variant.id);
+      if (permalink) window.open(permalink, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    // A real storefront said no (e.g. sold out) — surface it where the shopper
+    // can read it: the sheet has room for the message.
+    const sheetApi = pcOpenVariantSheet(product);
+    if (sheetApi && result.message) sheetApi.showMessage(result.message);
+  }
+
   function pcBuildCard(product) {
     const href = product.url || product.product_url || null;
     const card = document.createElement(href ? 'a' : 'div');
@@ -4468,6 +4982,24 @@ function toggleMenu(open) {
       foot.appendChild(cta);
     }
     body.appendChild(foot);
+
+    // Shopify-mirrored products carry variants -> the buy button (multiple
+    // variants open the option sheet, a single variant adds directly). The
+    // card stays a link to the product page; the button intercepts its click.
+    const variants = pcValidVariants(product);
+    if (variants.length > 0) {
+      const buyBtn = document.createElement('button');
+      buyBtn.type = 'button';
+      buyBtn.className = 'ub-pc-buy-btn';
+      buyBtn.textContent = variants.length > 1 ? 'Select options' : 'Add to cart';
+      buyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (variants.length > 1) pcOpenVariantSheet(product);
+        else pcDirectAdd(product, variants[0], buyBtn);
+      });
+      body.appendChild(buyBtn);
+    }
     card.appendChild(body);
 
     return card;
