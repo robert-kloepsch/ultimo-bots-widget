@@ -96,6 +96,22 @@ Shopify cart (widget embedded elsewhere) opens the checkout **permalink**
 (`origin/cart/{variantId}:1`). The sheet is appended to `chatWindow`, never
 `document.body` (Shadow-DOM isolation).
 
+After a successful add the widget also syncs the **theme's cart UI** (drawer +
+header badge — theme-rendered HTML that only the theme's own add flow would
+repaint), three tiers in `pcSyncThemeCart`: (1) Dawn-family — request the
+`<cart-drawer>` element's own section ids in the `/cart/add.js` call and hand
+the returned HTML to `renderContents()` (drawer repaints and opens, identical
+to the theme's native add UX); (2) Horizon-family (Shopify's post-2025
+defaults, no `<cart-drawer>`) — dispatch a hand-rolled
+`shopify:cart:lines-update` STANDARD storefront event (`action:'add'` +
+`lines` + a `promise` resolving `{cart:null, detail:{itemCount}}` from
+`/cart.js`; failure rejects as AbortError so listeners stay quiet): the badge
+repaints, the cart items component re-fetches its own section, the drawer
+auto-opens (`pcDispatchStandardCartEvent`, contract read from Shopify/horizon
++ cdn.shopify.com/storefront/standard-events.js); (3) generic — a `/cart.js`
+read updates common badge elements (`pcUpdateCartBadges`). An unknown theme
+keeps the old behaviour — server cart correct, UI catches up on navigation.
+
 **Deliberately widget-only:** the hosted chat page
 ([`../ultimo-bots-frontend/`](../ultimo-bots-frontend/), which reuses the portal's
 `ProductCarousel.js`) has NO storefront cart, so it keeps the plain "View" link.

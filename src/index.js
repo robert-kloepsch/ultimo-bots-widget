@@ -1783,7 +1783,7 @@ async function initializeChatWidget() {
     }
     .ub-pc-buy-btn:hover:not(:disabled) { filter: brightness(1.12); }
     .ub-pc-buy-btn:disabled { opacity: 0.6; cursor: default; }
-    .ub-pc-buy-btn.ub-pc-buy-done { background: #1f9d55 !important; }
+    .ub-pc-buy-btn:disabled.ub-pc-buy-busy { opacity: 0.9; cursor: progress; }
 
     /* ── Variant sheet: bottom sheet INSIDE the chat window (Shadow-DOM safe,
        never document.body). Backdrop + panel, Chatbase-style. ── */
@@ -1794,17 +1794,19 @@ async function initializeChatWidget() {
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      background: rgba(20, 20, 40, 0.45);
+      background: rgba(15, 15, 25, 0.35);
+      -webkit-backdrop-filter: blur(7px);
+      backdrop-filter: blur(7px);
       border-radius: 16px;
       animation: ub-pc-sheet-fade 0.18s ease;
     }
     @keyframes ub-pc-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
     .ub-pc-sheet {
       background: #ffffff;
-      border-radius: 16px 16px 16px 16px;
+      border-radius: 20px;
       margin: 10px;
-      padding: 16px;
-      box-shadow: 0 -6px 24px rgba(20, 20, 40, 0.18);
+      padding: 20px;
+      box-shadow: 0 18px 48px rgba(10, 10, 25, 0.22);
       animation: ub-pc-sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
     }
     @keyframes ub-pc-sheet-up {
@@ -1813,75 +1815,90 @@ async function initializeChatWidget() {
     }
     .ub-pc-sheet-head {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: 12px;
+      margin-bottom: 16px;
     }
     .ub-pc-sheet-title {
-      font-size: 15px;
+      font-size: 17px;
       font-weight: 700;
       line-height: 1.3;
-      color: #1a1a2e;
+      color: #111219;
     }
     .ub-pc-sheet-close {
       flex: 0 0 auto;
-      width: 28px;
-      height: 28px;
+      width: 30px;
+      height: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
       border: none;
-      border-radius: 999px;
-      background: #f1f0f6;
-      color: #3a3550;
+      border-radius: 8px;
+      background: transparent;
+      color: #111219;
       cursor: pointer;
       padding: 0;
+      transition: background 0.15s ease;
     }
-    .ub-pc-sheet-close:hover { background: #e4e2ee; }
-    .ub-pc-sheet-field { margin-bottom: 10px; }
+    .ub-pc-sheet-close:hover { background: #f2f2f5; }
+    .ub-pc-sheet-field { margin-bottom: 14px; }
     .ub-pc-sheet-label {
       display: block;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      color: #8a86a0;
-      margin-bottom: 4px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: #5f6270;
+      margin-bottom: 7px;
     }
     .ub-pc-sheet-select {
       width: 100%;
       box-sizing: border-box;
-      padding: 9px 10px;
-      border: 1px solid #dcdae6;
-      border-radius: 10px;
-      background: #ffffff;
-      color: #1a1a2e;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      padding: 12px 42px 12px 14px;
+      border: 1px solid #e4e4ea;
+      border-radius: 12px;
+      background-color: #ffffff;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7078' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      background-size: 16px 16px;
+      color: #111219;
       font-family: inherit;
-      font-size: 13px;
+      font-size: 14px;
+      line-height: 1.3;
       cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+    .ub-pc-sheet-select:hover { border-color: #cfcfd8; }
+    .ub-pc-sheet-panel {
+      background: #f5f5f7;
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-top: 16px;
     }
     .ub-pc-sheet-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      margin: 12px 0 10px;
+      margin: 0 0 12px;
     }
-    .ub-pc-sheet-total-label { font-size: 12.5px; color: #6f6b82; }
+    .ub-pc-sheet-total-label { font-size: 14px; color: #5f6270; }
     .ub-pc-sheet-price {
       font-size: 16px;
       font-weight: 700;
-      color: #15151f;
+      color: #111219;
       white-space: nowrap;
     }
     .ub-pc-sheet-status {
-      font-size: 12px;
+      font-size: 12.5px;
       line-height: 1.4;
       color: #b3261e;
-      min-height: 15px;
-      margin-bottom: 6px;
+      margin: 0 0 10px;
     }
+    .ub-pc-sheet-status:empty { display: none; }
     .ub-pc-sheet-status.ub-pc-sheet-status-ok { color: #1f9d55; }
     .ub-pc-sheet-add {
       display: flex;
@@ -1890,38 +1907,35 @@ async function initializeChatWidget() {
       gap: 8px;
       width: 100%;
       box-sizing: border-box;
-      padding: 11px 12px;
+      padding: 13px 14px;
       border: none;
       border-radius: 12px;
       background: #3a3550;
       color: #ffffff;
       font-family: inherit;
-      font-size: 13.5px;
-      font-weight: 700;
+      font-size: 14.5px;
+      font-weight: 600;
       cursor: pointer;
       transition: filter 0.15s ease, opacity 0.15s ease, background 0.2s ease;
     }
     .ub-pc-sheet-add:hover:not(:disabled) { filter: brightness(1.12); }
     .ub-pc-sheet-add:disabled { opacity: 0.55; cursor: default; }
-    .ub-pc-sheet-add.ub-pc-sheet-add-done { background: #1f9d55 !important; }
     .ub-pc-sheet-cart-link {
       display: block;
       text-align: center;
-      margin-top: 9px;
+      margin-top: 10px;
       font-size: 12.5px;
       font-weight: 600;
       color: #3a3550;
       text-decoration: underline;
       cursor: pointer;
     }
-    .ub-pc-sheet-spin {
-      width: 14px;
-      height: 14px;
+    .ub-pc-btn-spin {
+      width: 15px;
+      height: 15px;
       flex: 0 0 auto;
-      border: 2px solid rgba(255, 255, 255, 0.45);
-      border-top-color: #ffffff;
-      border-radius: 50%;
-      animation: ub-pc-spin 0.7s linear infinite;
+      transform-origin: 50% 50%;
+      animation: ub-pc-spin 0.8s linear infinite;
     }
     @keyframes ub-pc-spin { to { transform: rotate(360deg); } }
 
@@ -2443,10 +2457,11 @@ async function initializeChatWidget() {
       color: ${headerFontColor};
     }
     .ub-pc-sheet-cart-link { color: ${themeColor}; }
+    /* Calm focus: a brand-coloured border only — a spread box-shadow ring reads
+       as a stray border/glow next to the reference design. */
     .ub-pc-sheet-select:focus {
       outline: none;
       border-color: ${themeColor};
-      box-shadow: 0 0 0 3px ${themeColor}22;
     }
   `;
   shadowRoot.appendChild(dynamicStyleEl);
@@ -4582,8 +4597,17 @@ function toggleMenu(open) {
 
   const PC_ICON_CLOSE =
     '<svg viewBox="0 0 384 512" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg>';
-  const PC_ICON_CART =
-    '<svg viewBox="0 0 576 512" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M0 24C0 10.7 10.7 0 24 0L69.5 0c22 0 41.5 12.8 50.6 32l411 0c26.3 0 45.5 25 38.6 50.4l-41 152.3c-8.5 31.4-37 53.3-69.5 53.3l-288.5 0 5.4 28.5c2.2 11.3 12.1 19.5 23.6 19.5L488 336c13.3 0 24 10.7 24 24s-10.7 24-24 24l-288.3 0c-34.6 0-64.3-24.6-70.7-58.5L77.4 54.5c-.7-3.8-4-6.5-7.9-6.5L24 48C10.7 48 0 37.3 0 24zM128 464a48 48 0 1 1 96 0 48 48 0 1 1 -96 0zm336-48a48 48 0 1 1 0 96 48 48 0 1 1 0-96z"/></svg>';
+  // Ring spinner for the add-to-cart busy state: an SVG arc with round caps
+  // (self-contained, currentColor, rotated by .ub-pc-btn-spin).
+  const PC_ICON_SPINNER =
+    '<svg class="ub-pc-btn-spin" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" ' +
+    'stroke-linecap="round" stroke-dasharray="46 62.8"/></svg>';
+
+  // Plus glyph on the sheet CTA ("+ Add to cart", the reference pattern).
+  const PC_ICON_PLUS =
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 
   // A variant id is only ever used if it is purely numeric — it gets embedded
   // into /cart/add.js payloads and cart permalink URLs.
@@ -4626,6 +4650,105 @@ function toggleMenu(open) {
     );
   }
 
+  /* Theme cart-UI sync. The drawer + header badge are THEME-rendered HTML that
+   * only the theme's own add flow repaints — a widget-side /cart/add.js fills
+   * the real cart but leaves that UI stale until the next navigation. Two tiers:
+   *   1. Native (Dawn-family themes): a <cart-drawer> custom element exposes
+   *      getSectionsToRender() / renderContents(). Request exactly those section
+   *      ids in the add call (Shopify returns the freshly rendered HTML inline)
+   *      and hand the response to the theme — it repaints badge + drawer and
+   *      opens the drawer, identical to its own add-to-cart UX.
+   *   2. Generic fallback: read /cart.js item_count and update the common badge
+   *      elements. Best-effort BY DESIGN: an unknown theme simply keeps the old
+   *      behaviour (server cart correct, UI catches up on navigation) — never
+   *      worse than before. */
+  function pcThemeCartDrawer() {
+    const el = document.querySelector('cart-drawer');
+    return el &&
+      typeof el.getSectionsToRender === 'function' &&
+      typeof el.renderContents === 'function'
+      ? el
+      : null;
+  }
+
+  function pcThemeCartSections(drawer) {
+    if (!drawer) return null;
+    try {
+      const ids = drawer.getSectionsToRender().map((s) => s && s.id).filter(Boolean);
+      return ids.length ? ids : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function pcUpdateCartBadges() {
+    fetch('/cart.js', { headers: { Accept: 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cart) => {
+        if (!cart || typeof cart.item_count !== 'number') return;
+        const count = String(cart.item_count);
+        [
+          '[data-cart-count]',
+          '.cart-count-bubble span[aria-hidden="true"]',
+          '.cart-count',
+          '#CartCount',
+        ].forEach((sel) => {
+          document.querySelectorAll(sel).forEach((el) => {
+            try {
+              if (el.hasAttribute('data-cart-count')) el.setAttribute('data-cart-count', count);
+              el.textContent = count;
+            } catch { /* one odd element must not stop the rest */ }
+          });
+        });
+      })
+      .catch(() => {});
+  }
+
+  /* Horizon-family themes (Shopify's post-2025 defaults) have no <cart-drawer>
+   * element — their components listen on document for the STANDARD storefront
+   * event 'shopify:cart:lines-update' (see Shopify/horizon + the public
+   * cdn.shopify.com/storefront/standard-events.js): the header badge reads
+   * `(await event.promise).cart?.totalQuantity ?? detail?.itemCount`, the cart
+   * items component re-fetches its own section HTML when the event carries no
+   * `detail.sections`, and the drawer auto-opens on action==='add'. Dispatching
+   * a hand-rolled compatible event therefore gives the theme's native post-add
+   * UX. Harmless no-op on themes that don't listen. */
+  function pcDispatchStandardCartEvent(variantId) {
+    try {
+      const ev = new Event('shopify:cart:lines-update', { bubbles: true, cancelable: true });
+      ev.action = 'add';
+      ev.context = 'ultimo-bots-widget';
+      ev.lines = [
+        { merchandiseId: `gid://shopify/ProductVariant/${String(variantId)}`, quantity: 1 },
+      ];
+      ev.promise = fetch('/cart.js', { headers: { Accept: 'application/json' } })
+        .then((r) => {
+          if (!r.ok) throw new Error('cart read failed');
+          return r.json();
+        })
+        .then((cart) => ({ cart: null, detail: { itemCount: cart.item_count } }))
+        .catch(() => {
+          // Reject as AbortError: Horizon's listeners treat that as "ignore
+          // quietly" — anything else would flash the badge to 0 / console-warn.
+          const err = new Error('cart read failed');
+          err.name = 'AbortError';
+          throw err;
+        });
+      document.dispatchEvent(ev);
+    } catch { /* an exotic Event implementation must never break the add flow */ }
+  }
+
+  function pcSyncThemeCart(drawer, addData, variantId) {
+    try {
+      if (drawer && addData && addData.sections) {
+        drawer.renderContents(addData);
+        return;
+      }
+    } catch { /* unexpected theme markup — fall through to the generic tiers */ }
+    pcDispatchStandardCartEvent(variantId);
+    pcUpdateCartBadges();
+  }
+
   /* Add one variant to the storefront cart. Resolves to:
    *   { ok: true }                     — in the cart (same-origin AJAX Cart API)
    *   { ok: false, message }          — a Shopify storefront answered with an
@@ -4637,14 +4760,26 @@ function toggleMenu(open) {
   async function pcAddToCart(variantId) {
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
+    const drawer = pcThemeCartDrawer();
+    const sections = pcThemeCartSections(drawer);
+    const payload = { items: [{ id: Number(variantId), quantity: 1 }] };
+    if (sections) {
+      payload.sections = sections;
+      payload.sections_url = window.location.pathname;
+    }
     try {
       const resp = await fetch('/cart/add.js', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ items: [{ id: Number(variantId), quantity: 1 }] }),
+        body: JSON.stringify(payload),
         signal: controller ? controller.signal : undefined,
       });
-      if (resp.ok) return { ok: true };
+      if (resp.ok) {
+        let data = null;
+        try { data = await resp.json(); } catch { /* sync falls back to badges */ }
+        pcSyncThemeCart(drawer, data, variantId);
+        return { ok: true };
+      }
       let data = null;
       try { data = await resp.json(); } catch { /* non-JSON -> not a cart API */ }
       if (data && (data.description || data.message)) {
@@ -4740,36 +4875,42 @@ function toggleMenu(open) {
       sheet.appendChild(field);
     });
 
+    // Footer panel (reference layout): total row + status + CTA share one soft
+    // grey container, so price and button read as a single aligned unit.
+    const panel = document.createElement('div');
+    panel.className = 'ub-pc-sheet-panel';
+    sheet.appendChild(panel);
+
     const row = document.createElement('div');
     row.className = 'ub-pc-sheet-row';
     const totalLabel = document.createElement('span');
     totalLabel.className = 'ub-pc-sheet-total-label';
-    totalLabel.textContent = 'Total';
+    totalLabel.textContent = 'Total amount';
     const priceEl = document.createElement('span');
     priceEl.className = 'ub-pc-sheet-price';
     row.appendChild(totalLabel);
     row.appendChild(priceEl);
-    sheet.appendChild(row);
+    panel.appendChild(row);
 
     const status = document.createElement('div');
     status.className = 'ub-pc-sheet-status';
-    sheet.appendChild(status);
+    panel.appendChild(status);
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'ub-pc-sheet-add';
-    sheet.appendChild(addBtn);
+    panel.appendChild(addBtn);
 
     const setAddLabel = (text, { spinner = false, cart = true } = {}) => {
       addBtn.textContent = '';
       if (spinner) {
         const spin = document.createElement('span');
-        spin.className = 'ub-pc-sheet-spin';
+        spin.innerHTML = PC_ICON_SPINNER;
         spin.setAttribute('aria-hidden', 'true');
         addBtn.appendChild(spin);
       } else if (cart) {
         const ic = document.createElement('span');
-        ic.innerHTML = PC_ICON_CART;
+        ic.innerHTML = PC_ICON_PLUS;
         ic.setAttribute('aria-hidden', 'true');
         addBtn.appendChild(ic);
       }
@@ -4814,8 +4955,10 @@ function toggleMenu(open) {
       busy = false;
       selects.forEach((s) => { s.disabled = false; });
       if (result.ok) {
-        addBtn.classList.add('ub-pc-sheet-add-done');
-        setAddLabel('Added to cart', { cart: false });
+        // Back to the normal, clickable state — the shopper may add more; the
+        // status line + theme drawer/badge carry the success feedback.
+        setAddLabel('Add to cart');
+        addBtn.disabled = false;
         status.classList.add('ub-pc-sheet-status-ok');
         status.textContent = 'It is waiting in your cart.';
         if (!sheet.querySelector('.ub-pc-sheet-cart-link')) {
@@ -4823,7 +4966,7 @@ function toggleMenu(open) {
           cartLink.className = 'ub-pc-sheet-cart-link';
           cartLink.href = `${window.location.origin}/cart`;
           cartLink.textContent = 'View cart';
-          sheet.appendChild(cartLink);
+          panel.appendChild(cartLink);
         }
         return;
       }
@@ -4870,22 +5013,24 @@ function toggleMenu(open) {
   }
 
   // Single-variant products skip the sheet: one click adds straight to the
-  // cart, with the same fallback rules, states shown inline on the button.
+  // cart, with the same fallback rules. Busy = a ring spinner in the button;
+  // afterwards the button returns to its normal clickable state (repeat adds
+  // are allowed — the theme's drawer/badge carry the success feedback).
   async function pcDirectAdd(product, variant, btn) {
-    if (btn.dataset.busy === '1' || btn.classList.contains('ub-pc-buy-done')) return;
+    if (btn.dataset.busy === '1') return;
     btn.dataset.busy = '1';
-    const original = btn.textContent;
+    const original = btn.innerHTML;
     btn.disabled = true;
-    btn.textContent = 'Adding…';
+    btn.classList.add('ub-pc-buy-busy');
+    btn.setAttribute('aria-busy', 'true');
+    btn.innerHTML = PC_ICON_SPINNER;
     const result = await pcAddToCart(variant.id);
     delete btn.dataset.busy;
-    if (result.ok) {
-      btn.classList.add('ub-pc-buy-done');
-      btn.textContent = 'Added to cart';
-      return;
-    }
+    btn.classList.remove('ub-pc-buy-busy');
+    btn.removeAttribute('aria-busy');
+    btn.innerHTML = original;
     btn.disabled = false;
-    btn.textContent = original;
+    if (result.ok) return;
     if (result.fallback) {
       const permalink = pcCheckoutPermalink(product, variant.id);
       if (permalink) window.open(permalink, '_blank', 'noopener,noreferrer');
@@ -5232,7 +5377,13 @@ function toggleMenu(open) {
         });
       }
     });
-    sessionStorage.setItem(`chat-history-${botId}`, JSON.stringify(items));
+    try {
+      sessionStorage.setItem(`chat-history-${botId}`, JSON.stringify(items));
+    } catch (err) {
+      // Quota/serialisation failure must never break the send flow — the live
+      // DOM is correct either way; only reload-persistence degrades.
+      console.warn('Could not persist chat history:', err);
+    }
   }
 
   async function loadChatHistory() {
@@ -5247,10 +5398,21 @@ function toggleMenu(open) {
     // init, the DOM is populated before the WS `widget_init_ack` can arrive
     // and trigger the agent_joined welcome-inject path.
 
+    let items;
     try {
-      const items = JSON.parse(saved);
+      items = JSON.parse(saved);
+      if (!Array.isArray(items)) throw new Error('saved history is not an array');
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      sessionStorage.removeItem(`chat-history-${botId}`);
+      return;
+    }
 
-      items.forEach((item) => {
+    // Each item renders inside its own try/catch: one broken entry must skip
+    // ONLY itself — the old whole-restore catch cleared sessionStorage and
+    // silently dropped every message after the broken one.
+    items.forEach((item) => {
+      try {
         // Backwards compat: older saves stored bare {text, sender} objects
         // without a `kind` field — treat those as messages.
         const kind = item.kind || (item.sender ? 'message' : null);
@@ -5310,16 +5472,25 @@ function toggleMenu(open) {
         // else: products-only reply, no text bubble — just the gallery below.
 
         if (hasProducts) {
-          attachProductsToRow(row, msg.products);
+          // DEFERRED by a tick: the eager module-init restore runs BEFORE the
+          // product-carousel constants further down this file are initialized
+          // (const temporal dead zone) — attaching synchronously here threw a
+          // ReferenceError that used to wipe the whole saved history. One tick
+          // later module evaluation has finished and the gallery builds fine.
+          const products = msg.products;
+          setTimeout(() => {
+            try { attachProductsToRow(row, products); } catch (err) {
+              console.warn('Could not restore a product gallery:', err);
+            }
+          }, 0);
         }
 
         chatBody.insertBefore(row, bottomSpacerEl);
-      });
+      } catch (err) {
+        console.warn('Skipping one saved chat item:', err);
+      }
+    });
 
-      scrollToBottom();
-    } catch (error) {
-      console.error('Failed to load chat history:', error);
-      sessionStorage.removeItem(`chat-history-${botId}`);
-    }
+    scrollToBottom();
   }
 }
