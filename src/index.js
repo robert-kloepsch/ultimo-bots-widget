@@ -110,6 +110,45 @@ function deriveLiveCtaColors(themeColorHex, headerFontColorHex) {
   };
 }
 
+// ── AI disclosure (EU AI Act Art. 50(1), applies from 2 August 2026) ──
+// Visitors must be told they are talking to an AI at the latest at the first
+// interaction. The strip under the header carries that notice. It is a system
+// element: NOT part of widget_configuration, and deliberately independent of
+// the "Powered by" badge, which paying customers are allowed to remove.
+const AI_DISCLOSURE_TEXT = {
+  en: 'You are chatting with an AI assistant',
+  de: 'Sie chatten mit einem KI-Assistenten',
+  fr: 'Vous discutez avec un assistant IA',
+  es: 'Estás chateando con un asistente de IA',
+  it: 'Stai chattando con un assistente IA',
+  pt: 'Está a conversar com um assistente de IA',
+  nl: 'Je chat met een AI-assistent',
+  pl: 'Rozmawiasz z asystentem AI',
+};
+
+// Taken from the visitor's browser, not from the bot config — no settings
+// column, no portal UI, and a French visitor on a German site still reads it
+// in their own language. Unknown locale falls back to English.
+function resolveDisclosureText() {
+  const lang = String(navigator.language || 'en').slice(0, 2).toLowerCase();
+  return AI_DISCLOSURE_TEXT[lang] || AI_DISCLOSURE_TEXT.en;
+}
+
+// The icon carries the customer's theme colour, but a pale brand would be
+// invisible on the light strip, so darken it (hue intact) until it clears the
+// WCAG 3:1 floor for non-text UI. Same "never unreadable" idea as the CTA above.
+function deriveDisclosureIconColor(themeColorHex) {
+  const stripBg = { r: 247, g: 247, b: 249 };
+  const black = { r: 0, g: 0, b: 0 };
+  const theme = _hexToRgb(themeColorHex);
+  if (!theme) return '#4a4658';
+  let c = theme;
+  for (let t = 0.1; t <= 0.6 && _contrast(c, stripBg) < 3; t += 0.1) {
+    c = _mix(theme, black, t);
+  }
+  return _rgbToHex(c);
+}
+
 (function bootstrap() {
   const POLL_INTERVAL = 200;
   const MAX_WAIT = 60000;
@@ -403,6 +442,11 @@ async function initializeChatWidget() {
       font-weight: 700;
     }
     .saicf-chat-window {
+      /* Single flush line for every row of the panel: header, notice strip,
+         messages, quick replies, input. Change it here and the whole left and
+         right edge moves together. Edge icons are aligned by their visible
+         glyph (tight viewBox + ::after touch target), not by their icon box. */
+      --saicf-gutter: 10px;
       position: fixed;
       bottom: 12px;
       right: 12px;
@@ -434,7 +478,7 @@ async function initializeChatWidget() {
     }
     .saicf-chat-header {
       color: white;
-      padding: 10px 15px;
+      padding: 10px var(--saicf-gutter);
       border-radius: 16px 16px 0px 0px;
       display: flex;
       flex-direction: column;
@@ -443,6 +487,10 @@ async function initializeChatWidget() {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      /* The 30px logo is what gives the header its height; without a logo the
+         title text alone (~18px) made the bar visibly flatter. Reserve the
+         logo height so the header is identical with and without one. */
+      min-height: 30px;
     }
     .saicf-logo-message-container {
       display: flex;
@@ -454,7 +502,7 @@ async function initializeChatWidget() {
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 8px 14px;
+      padding: 8px var(--saicf-gutter);
       padding-top: 0px;
       background-color: rgba(0, 0, 0, 0.08);
       color: inherit;
@@ -493,7 +541,91 @@ async function initializeChatWidget() {
     .saicf-agent-bar-name {
       font-weight: 600;
     }
+    /* AI disclosure strip — EU AI Act Art. 50(1). Neutral by design: the chat
+       body is always white, so fixed colours stay legible under every customer
+       theme. Only the icon picks up theme_color, guarded for contrast. */
+    .saicf-ai-disclosure {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      /* Fixed height + hairline via inset shadow (not border) so the content
+         box is exactly 36px: icon (14px) and dismiss (10px) land on integer
+         offsets around the one shared 18px centerline. min-height + padding
+         made the centering dependent on text wrapping and half-pixels.
+         flex-shrink 0 is LOAD-BEARING: the chat window is a fixed-height
+         flex column, and without it the strip gets squeezed flat as soon as
+         the content column is taller than the window. */
+      flex: 0 0 auto;
+      height: 36px;
+      min-height: 36px;
+      padding: 0 var(--saicf-gutter);
+      background-color: #f7f7f9;
+      box-shadow: inset 0 -1px 0 #e9e8ee;
+      color: #4a4658;
+      font-size: 13px;
+    }
+    .saicf-ai-disclosure-icon {
+      display: block;
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      /* No vertical nudge: pixel measurement (pixel_truth.mjs) showed plain
+         flex centering puts icon, text mass and dismiss within 0.05px for
+         both Roboto and DM Sans. Do not add font-metric "corrections" here —
+         that experiment made it visibly worse twice. */
+    }
+    .saicf-ai-disclosure-text {
+      min-width: 0;
+      line-height: 1.35;
+      /* long translations on narrow screens stay one line instead of pushing
+         the row taller and off the centerline */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .saicf-ai-disclosure-dismiss {
+      /* flex item on the same centerline as icon and text — absolute
+         positioning gave it a second, subtly different centering mechanism */
+      position: relative;
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 10px;
+      height: 10px;
+      flex: 0 0 auto;
+      padding: 0;
+      border: none;
+      background: none;
+      color: #8a8698;
+      cursor: pointer;
+      outline: none;
+    }
+    /* box is the glyph so the cross lands on the gutter; the touch target is
+       given back here instead of by padding, which would break the alignment */
+    .saicf-ai-disclosure-dismiss::after {
+      content: "";
+      position: absolute;
+      inset: -10px;
+    }
+    .saicf-ai-disclosure-dismiss svg {
+      display: block;
+      width: 10px;
+      height: 10px;
+      fill: currentColor;
+    }
+    .saicf-ai-disclosure-dismiss:hover {
+      color: #4a4658;
+    }
+    .saicf-ai-disclosure-dismiss:focus-visible {
+      outline: 2px solid #4a4658;
+      outline-offset: 2px;
+    }
     .saicf-close-btn {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: none;
       border: none;
       color: rgb(218, 43, 43);
@@ -501,6 +633,24 @@ async function initializeChatWidget() {
       padding: 0;
       outline: none;
       cursor: pointer;
+    }
+    /* The button box equals the visible cross (the icon carries a tight
+       viewBox), so the glyph sits exactly on the gutter. Padding would push it
+       inward, so the touch target is restored with a transparent overlay. */
+    .saicf-close-btn svg {
+      /* 16.5px = the visible size of the old 32px icon box (264/512 glyph
+         at uniform scale). Same glyph on screen, box now equals it. */
+      display: block;
+      width: 16.5px;
+      height: 16.5px;
+      fill: currentColor;
+    }
+    .saicf-close-btn::after {
+      content: "";
+      position: absolute;
+      /* 8px sideways is exactly half the header-actions gap, so this target
+         never overlaps the one of the button next to it */
+      inset: -10px -8px;
     }
     .saicf-close-chat-widget-icon {
       cursor: pointer;
@@ -522,8 +672,7 @@ async function initializeChatWidget() {
     }
     .saicf-chat-body {
       flex: 1;
-      padding: 8px;
-      padding-top: 0;
+      padding: 0 var(--saicf-gutter) 8px;
       overflow-y: auto;
       overflow-anchor: none;
       display: flex;
@@ -586,7 +735,7 @@ async function initializeChatWidget() {
     .saicf-input-send-container {
       display: flex;
       border-top: 1px solid #f1f1f1;
-      padding: 10px;
+      padding: 10px var(--saicf-gutter);
       background-color: #fafafa;
       align-items: flex-end;
     }
@@ -661,6 +810,14 @@ async function initializeChatWidget() {
       padding: 5px;
       border-radius: 10px;
       display: inline-block;
+    }
+    /* Bot and agent bubbles are white on white, so their padding is pure
+       inset. With an avatar in front the text is meant to be indented, but
+       without one the first line has to start on the gutter like every other
+       row, so drop the left padding in that case only. */
+    .saicf-message-row.bot > .saicf-widget-message:first-child,
+    .saicf-message-row.agent > .saicf-widget-message:first-child {
+      padding-left: 0;
     }
     .saicf-message-row.bot .saicf-widget-message {
       max-width: calc(100% - 48px);
@@ -1069,7 +1226,7 @@ async function initializeChatWidget() {
       flex-wrap:wrap-reverse;
       justify-content: flex-end;
       gap:8px;
-      padding:0 10px;
+      padding:0 var(--saicf-gutter);
       background: white;
     }
 
@@ -1118,7 +1275,7 @@ async function initializeChatWidget() {
     .saicf-live-cta-row {
       display: flex;
       justify-content: center;
-      padding: 6px 10px 2px;
+      padding: 6px var(--saicf-gutter) 2px;
       background: white;
     }
     .saicf-live-cta-btn {
@@ -1161,23 +1318,32 @@ async function initializeChatWidget() {
     .saicf-header-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 16px;
       position: relative; /* anchor menu below */
     }
 
     .saicf-ellipsis-btn {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: none;
       border: none;
       color: inherit;
-      padding: 4px;
+      padding: 0;
       margin: 0;
       cursor: pointer;
-      border-radius: 6px;
-      transition: background-color .2s ease, transform .2s ease;
-      font-size: 20px;
+      transition: transform .2s ease;
     }
     .saicf-ellipsis-btn:hover { transform: scale(1.05); }
-    .saicf-ellipsis-btn svg { width: 1.4em; height: 1.4em; display: block; }
+    /* 23.5 x 6.1px = the visible size the dots had before (28px box at
+       uniform scale); ratio follows the measured 432:112 glyph box */
+    .saicf-ellipsis-btn svg { width: 23.5px; height: 6.1px; display: block; }
+    .saicf-ellipsis-btn::after {
+      content: "";
+      position: absolute;
+      inset: -14px -8px;
+    }
 
     .saicf-menu {
       position: absolute;
@@ -1298,8 +1464,10 @@ async function initializeChatWidget() {
       }
 
       .saicf-chat-header {
-        padding: 12px 10px;
-        margin-bottom: 5px;
+        padding: 12px var(--saicf-gutter);
+        /* No margin below the header: the AI-disclosure strip sits directly
+           underneath and a gap showed as a white line between the two.
+           Desktop never had this margin either. */
       }
       .saicf-chat-window .saicf-chat-body {
         flex: 1 1 auto !important;
@@ -2191,14 +2359,14 @@ async function initializeChatWidget() {
         <div class="saicf-header-actions" aria-label="Chat actions">
           <!-- three dots -->
           <button class="saicf-ellipsis-btn" aria-label="More actions" title="More">
-            <svg viewBox="0 0 448 512" fill="${headerFontColor}">
+            <svg viewBox="8 200 432 112" fill="${headerFontColor}">
               <path d="M120 256a56 56 0 1 1-112 0 56 56 0 1 1 112 0zm160 0a56 56 0 1 1-112 0 56 56 0 1 1 112 0zm160 0a56 56 0 1 1-112 0 56 56 0 1 1 112 0z"/>
             </svg>
           </button>
 
           <!-- close X (unchanged) -->
           <button class="saicf-close-btn saicf-close-chat-widget-icon" aria-label="Close chat" style="color:${headerFontColor};">
-            <svg viewBox="0 0 384 512" style="height:32px;width:32px;fill:currentColor;">
+            <svg viewBox="56 152 264 264">
               <path d="M310.6 361.4 233.3 284l77.3-77.3c12.5-12.5 12.5-32.8 0-45.3-12.5-12.5-32.8-12.5-45.3 0L188 238.7 110.7 161.4c-12.5-12.5-32.8-12.5-45.3 0-12.5 12.5-12.5 32.8 0 45.3l77.3 77.3-77.3 77.3c-12.5 12.5-12.5 32.8 0 45.3 12.5 12.5 32.8 12.5 45.3 0L188 327.3l77.3 77.3c12.5 12.5 32.8 12.5 45.3 0 12.5-12.5 12.5-32.8 0-45.3z"/>
             </svg>
           </button>
@@ -2230,6 +2398,23 @@ async function initializeChatWidget() {
       </span>
     </div>
   `;
+  // Sits above every panel state (config loading, pre-chat form, chat), so the
+  // notice is on screen before the visitor can type, wherever the conversation
+  // starts. Hidden only while a human agent has taken over — see syncAiDisclosure.
+  const disclosureHTML = `
+    <div class="saicf-ai-disclosure">
+      <svg class="saicf-ai-disclosure-icon" viewBox="0 0 512 512" fill="${deriveDisclosureIconColor(themeColor)}" aria-hidden="true">
+        <path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336l24 0 0-64-24 0c-13.3 0-24-10.7-24-24s10.7-24 24-24l48 0c13.3 0 24 10.7 24 24l0 88 8 0c13.3 0 24 10.7 24 24s-10.7 24-24 24l-80 0c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"/>
+      </svg>
+      <span class="saicf-ai-disclosure-text">${resolveDisclosureText()}</span>
+      <button class="saicf-ai-disclosure-dismiss" type="button" aria-label="Dismiss notice" title="Dismiss">
+        <svg viewBox="32 96 320 320" aria-hidden="true">
+          <path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/>
+        </svg>
+      </button>
+    </div>
+  `;
+
   const poweredByHTML = removePoweredBy
     ? (customBrandingText
       ? `
@@ -2252,6 +2437,7 @@ async function initializeChatWidget() {
 
   chatWindow.innerHTML = `
     ${headerHTML}
+    ${disclosureHTML}
     <div class="saicf-config-loading">
       <svg class="saicf-config-spinner" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor">
         <path d="M304 48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zm0 416a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM48 304a48 48 0 1 0 0-96 48 48 0 1 0 0 96zm464-48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM142.9 437A48 48 0 1 0 75 369.1 48 48 0 1 0 142.9 437zm0-294.2A48 48 0 1 0 75 75a48 48 0 1 0 67.9 67.9zM369.1 437A48 48 0 1 0 437 369.1 48 48 0 1 0 369.1 437z"/>
@@ -2518,6 +2704,26 @@ async function initializeChatWidget() {
   const menu           = chatWindow.querySelector('.saicf-menu');
   const clearBtn       = chatWindow.querySelector('.saicf-menu-item--clear');
   const configLoading  = chatWindow.querySelector('.saicf-config-loading');
+  const aiDisclosure   = chatWindow.querySelector('.saicf-ai-disclosure');
+
+  // The visitor may dismiss the notice (by then they have been informed, which
+  // is what Art. 50(1) asks for); the customer may not. Kept in memory only, so
+  // it is back on the next page load rather than suppressed for good. It also
+  // steps aside while a human agent is in the chat, where it would be wrong.
+  let aiDisclosureDismissed = false;
+  function syncAiDisclosure() {
+    if (!aiDisclosure) return;
+    const liveAgentConnected = !!chatWindow.querySelector('.saicf-agent-bar.is-visible');
+    aiDisclosure.classList.toggle('hidden', aiDisclosureDismissed || liveAgentConnected);
+  }
+  const aiDisclosureDismissBtn = chatWindow.querySelector('.saicf-ai-disclosure-dismiss');
+  if (aiDisclosureDismissBtn) {
+    aiDisclosureDismissBtn.addEventListener('click', () => {
+      aiDisclosureDismissed = true;
+      syncAiDisclosure();
+    });
+  }
+
   const preChatContainer = chatWindow.querySelector('.saicf-pre-chat-container');
   const preChatFieldsContainer = chatWindow.querySelector('.saicf-pre-chat-fields');
   const preChatSubmitBtn = chatWindow.querySelector('.saicf-pre-chat-submit');
@@ -3394,6 +3600,7 @@ function toggleMenu(open) {
     if (nameEl) nameEl.textContent = agentName || 'Agent';
     bar.removeAttribute('hidden');
     bar.classList.add('is-visible');
+    syncAiDisclosure();
   }
 
   function hideAgentBar() {
@@ -3401,6 +3608,7 @@ function toggleMenu(open) {
     if (!bar) return;
     bar.setAttribute('hidden', '');
     bar.classList.remove('is-visible');
+    syncAiDisclosure();
   }
 
   // Mark the oldest N user bubbles that don't yet have a delivery tick with ✓.
