@@ -1,3 +1,23 @@
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+
+// Bundled, version-pinned (package.json) — the Webflow Marketplace requires
+// the shipped artifact to be self-contained: no runtime CDN imports. Exposed
+// as globals because every call site guards on `typeof marked`/`typeof
+// DOMPurify` (and legacy host pages may consume them).
+globalThis.marked = marked;
+globalThis.DOMPurify = DOMPurify;
+
+// Captured at eval time (only valid synchronously): on Webflow the hosted
+// <script> tag carries the bot id as a data-bot_id attribute
+// (ScriptApply.attributes) and no container div exists — the bootstrap
+// creates the container from this.
+const OWN_SCRIPT_BOT_ID = (() => {
+  const s = document.currentScript;
+  if (!s || !s.getAttribute) return null;
+  return s.getAttribute('data-bot_id') || s.getAttribute('data-user-id');
+})();
+
 const FONT_SOURCES = {
   'inter, sans-serif':
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap',
@@ -158,7 +178,15 @@ function deriveDisclosureIconColor(themeColorHex) {
 
   function startIfReady() {
     if (started) return true;
-    const container = document.getElementById('chat-widget-container');
+    let container = document.getElementById('chat-widget-container');
+    // Webflow hosted-script path: no pre-created container — build it from
+    // the bot id found on our own <script> tag.
+    if (!container && OWN_SCRIPT_BOT_ID && document.body) {
+      container = document.createElement('div');
+      container.id = 'chat-widget-container';
+      container.setAttribute('data-user-id', OWN_SCRIPT_BOT_ID);
+      document.body.appendChild(container);
+    }
     if (container && container.getAttribute('data-user-id')) {
       started = true;
       initializeChatWidget();
@@ -170,7 +198,17 @@ function deriveDisclosureIconColor(themeColorHex) {
   const observer = new MutationObserver(() => {
     if (startIfReady()) observer.disconnect();
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  // A header-placed script executes before <body> exists — arm the observer
+  // once it does (the DOMContentLoaded tryStart below covers startup then).
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!started && document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    });
+  }
 
   function tryStart() {
     if (startIfReady()) return;
@@ -191,15 +229,13 @@ function deriveDisclosureIconColor(themeColorHex) {
 })();
 
 async function initializeChatWidget() {
-  ['https://portal.ultimo-bots.com', 'https://cdn.jsdelivr.net']
+  ['https://portal.ultimo-bots.com']
     .forEach(h => {
       if (!document.querySelector(`link[rel="preconnect"][href="${h}"]`)) {
         const l = document.createElement('link');
         l.rel = 'preconnect'; l.href = h; l.crossOrigin = ''; document.head.appendChild(l);
       }
     });
-  let markedReady = typeof marked !== 'undefined';
-  let markedLoadPromise = null;
   let _linkTarget = '_self';
 
   function applyMarkedLinkRenderer() {
@@ -225,60 +261,16 @@ async function initializeChatWidget() {
     }
   }
 
-  async function ensureMarked() {
-    if (markedReady) return;
-    if (markedLoadPromise) return markedLoadPromise;
+  // marked + DOMPurify ship inside the bundle (see the imports at the top of
+  // this file) — configure them right away. The ensure*/load* functions stay
+  // as no-ops because the message-render paths still await them.
+  marked.setOptions({ gfm: true, breaks: true, headerIds: false });
+  applyMarkedLinkRenderer();
 
-    markedLoadPromise = (async () => {
-      try {
-        const mod = await import(/* webpackIgnore: true */
-          'https://cdn.jsdelivr.net/npm/marked@11.1.1/lib/marked.esm.js');
+  async function ensureMarked() { /* bundled — always ready */ }
+  async function loadDompurify() { /* bundled — always ready */ }
 
-        mod.marked.setOptions({ gfm: true, breaks: true, headerIds: false });
-        globalThis.marked = mod.marked;
-        markedReady = true;
-        applyMarkedLinkRenderer();
-      } catch (err) {
-        // Allow a retry on next call if the CDN failed transiently.
-        markedLoadPromise = null;
-        console.error('Failed to load marked:', err);
-      }
-    })();
-
-    return markedLoadPromise;
-  }
-
-  // Kick off marked loading as early as possible so bot messages always
-  // render as markdown, regardless of which code path triggers the first render.
-  ensureMarked();
-
-  // ── DOMPurify lazy-loader (mirrors the marked loader). Loaded from the
-  // same jsdelivr host that already serves `marked`; sanitises all HTML we
-  // ever assign via innerHTML from user/agent/bot-message content. ──
-  let dompurifyReady = typeof DOMPurify !== 'undefined';
-  let dompurifyLoadPromise = null;
-  async function loadDompurify() {
-    if (dompurifyReady) return;
-    if (dompurifyLoadPromise) return dompurifyLoadPromise;
-    dompurifyLoadPromise = (async () => {
-      try {
-        const mod = await import(/* webpackIgnore: true */
-          'https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.es.mjs');
-        globalThis.DOMPurify = mod.default || mod.DOMPurify;
-        dompurifyReady = true;
-      } catch (err) {
-        dompurifyLoadPromise = null;
-        console.error('Failed to load DOMPurify:', err);
-      }
-    })();
-    return dompurifyLoadPromise;
-  }
-  // Kick off DOMPurify loading alongside marked so the first bubble render
-  // has a sanitiser available.
-  loadDompurify();
-
-  // Helper: markdown-parse + sanitise. Safe to call even before marked/
-  // DOMPurify have finished loading — we fall back to escaped plain text.
+  // Helper: markdown-parse + sanitise.
   function sanitizedMarkdown(text) {
     const html = (typeof marked !== 'undefined') ? marked.parse(text) : String(text || '');
     if (typeof DOMPurify !== 'undefined') {

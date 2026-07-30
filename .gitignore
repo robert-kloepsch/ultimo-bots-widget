@@ -141,6 +141,10 @@ venv.bak/
 
 /node_modules
 
+# Release artifacts (webpack.release.js output) live in the ultimo-bots-cdn
+# repo, not here — committing them would deploy via GitHub Pages.
+/release
+
 # mypy
 .mypy_cache/
 .dmypy.json

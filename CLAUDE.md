@@ -22,8 +22,9 @@ is the deploy. Plan accordingly.
 
 - **Vanilla JavaScript** in one ~4.1k-line file ([`src/index.js`](src/index.js))
 - **webpack 5** ([`webpack.config.js`](webpack.config.js)). Entry `src/index.js` → output `dist/bundle.js`
-- **Bundle mode: `development`** — committed `dist/bundle.js` is NOT minified (~165 KB). Known issue.
-- **Runtime CDN deps** — `marked@11.1.1` + `dompurify@3.1.6` from jsdelivr at runtime, NOT bundled
+- **Bundle mode: `development`** for `dist/bundle.js` — committed bundle is NOT minified. Known issue.
+- **Bundled deps** — `marked@11.1.1` + `dompurify@3.1.6` are real npm dependencies, statically imported (since 2026-07, Webflow Marketplace requires a self-contained artifact; the old runtime jsdelivr imports are gone)
+- **Release build** — `npm run build:release` ([`webpack.release.js`](webpack.release.js)) emits the minified, versioned artifact `release/<version>/ultimo-widget.js` that is published to the `ultimo-bots-cdn` repo (GitHub Pages behind `widget.ultimo-bots.com`) and registered with Webflow via SRI hash. Published versions are IMMUTABLE — bump `package.json` version for a new release and update the backend's `WIDGET_VERSION`/`WIDGET_INTEGRITY_HASH` (`ultimo-bots-backend/src/controller/webflow.py`) in lockstep.
 - **Shadow DOM** + `:host { all: initial }` for full isolation
 - **Class prefix: `saicf-*`** — legacy, keep it
 - **Backend URLs hardcoded** to `https://portal.ultimo-bots.com/api/` and `wss://portal.ultimo-bots.com/api/ws`
@@ -123,8 +124,7 @@ below is about the shared live-agent state machine, not every gallery affordance
 - **Keep `useLiveAgent.js` in sync.** Any change to the WS / heartbeat / polling / session-token logic here must be mirrored in [`../ultimo-bots-frontend/src/useLiveAgent.js`](../ultimo-bots-frontend/src/useLiveAgent.js). Same PR. (The Shopify buy button touches NONE of that — it is not mirrored, by design.)
 - **Don't break Shadow DOM isolation.** Don't put styles in `document.head` (except the existing `body.no-scroll` snippet) or append elements to `document.body` directly.
 - **Keep the `saicf-` class prefix.** Renaming breaks every selector and any partner integration targeting the widget.
-- **Don't bundle `marked` / `DOMPurify`.** Intentionally CDN-loaded.
-- **Don't `await` CDN scripts before first render.** `sanitizedMarkdown()` handles "not loaded yet" explicitly. Never block on a third-party CDN.
+- **`marked` / `DOMPurify` are bundled — never reintroduce runtime CDN imports.** The Webflow Marketplace rejected the runtime-loading delivery chain (2026-07); the artifact must stay self-contained. (`ensureMarked()`/`loadDompurify()` remain as awaited no-ops.)
 - **`pointer-events: none` on the host container** + visible elements opt back in. Lets customers click through the invisible bounding box.
 - **Hardcoded backend URLs** — don't add relative URLs (widget runs on customer domains).
 - **`z-index: 2147483647`** is intentional (max signed int32). Don't reduce.
@@ -140,9 +140,10 @@ bundler injects the container, or inside a Wix/Webflow async-injecting
 runtime. [`src/index.js:113–152`](src/index.js):
 
 1. Look for `<div id="chat-widget-container" data-user-id="...">`
-2. If absent: poll every 200ms AND attach a `MutationObserver` to `document.body`
-3. Whichever finds it first wins; observer disconnects on success
-4. Hard cap 60s, then log + give up
+2. **Webflow hosted-script path:** if no container exists but our own `<script>` tag (captured via `document.currentScript` at eval time) carries `data-bot_id`, the bootstrap creates the container itself — this is how the SRI-pinned Webflow artifact boots without any loader
+3. If absent: poll every 200ms AND attach a `MutationObserver` to `document.body` (armed on DOMContentLoaded when the script runs in `<head>` before `<body>` exists)
+4. Whichever finds it first wins; observer disconnects on success
+5. Hard cap 60s, then log + give up
 
 Test against Wix and Webflow if you change this.
 
