@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<!--
+  Dev harness for the waiting-room games.
+
+  The games need no backend, no bot config and no live agent, so building and
+  tuning them through the real widget (which needs all three to reach the
+  waiting state) is a waste of time. This page reproduces just the geometry
+  and the CSS context they actually run in:
+
+    - a 430px chat window, the desktop width from index.js
+    - the mount target is the .saicf-chat-body-wrapper equivalent
+    - --saicf-gutter and the saicf-notice-in keyframe, which live in the
+      widget's static CSS block, not in gameStyles()
+
+  Serve the repo over http (ES modules will not load from file://):
+      npx http-server -p 8123 .
+      open http://localhost:8123/src/games/harness.html
+
+  Fidelity gap to keep in mind: this is NOT the Shadow DOM. Anything that
+  depends on `:host { all: initial }` or on shadowRoot event retargeting has
+  to be checked in the real widget.
+-->
+<meta charset="utf-8">
+<title>Waiting-room games — harness</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: #eef0f4;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  /* Stands in for .saicf-chat-window: same flex column, same gutter var. The
+     game mounts HERE, not on the body wrapper. */
+  .frame {
+    --saicf-gutter: 10px;
+    width: 430px;
+    /* Without this the flex body shrinks both frames on a narrow window, and
+       every measurement is then taken at a width the widget never has. */
+    flex-shrink: 0;
+    height: 620px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.16);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .frame.mobile { width: 380px; height: 560px; }
+  /* Mirrors the real rule in gameStyles(). */
+  .frame.saicf-game-mode > *:not(.fake-header):not(.saicf-game-overlay) {
+    display: none !important;
+  }
+  .fake-header {
+    padding: 12px var(--saicf-gutter);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    flex: 0 0 auto;
+  }
+  /* The real mount target: .saicf-chat-body-wrapper */
+  .wrapper {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .fake-body {
+    flex: 1;
+    padding: 0 var(--saicf-gutter) 8px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: #444;
+  }
+  .fake-footer {
+    flex: 0 0 auto;
+    padding: 10px var(--saicf-gutter);
+    border-top: 1px solid #eee;
+    color: #aaa;
+    font-size: 13px;
+  }
+  /* Copied from the widget's static CSS block — gameStyles() assumes these. */
+  @keyframes saicf-notice-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .saicf-system-notice {
+    display: flex; flex-direction: column; align-items: center; margin: 8px 0;
+  }
+  .saicf-system-notice-text {
+    background: #f0f0f0; color: #666; font-size: 12px; padding: 4px 12px;
+    border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;
+    max-width: 100%;
+  }
+  .saicf-system-notice-text.has-action {
+    flex-direction: column; gap: 8px; padding: 8px 14px; border-radius: 14px;
+  }
+  .saicf-notice-line { display: inline-flex; align-items: center; gap: 6px; }
+  .saicf-cancel-request {
+    background: #fff; border: 1px solid #d5d5d5; color: #666; font-size: 11px;
+    line-height: 19px; padding: 0 16px; border-radius: 10px; cursor: pointer;
+    flex-shrink: 0; white-space: nowrap;
+  }
+  .saicf-waiting-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #888;
+    display: inline-block;
+  }
+</style>
+
+<div class="frame" id="frame-desktop">
+  <div class="fake-header">Desktop 430px</div>
+  <div class="wrapper" id="wrap-desktop">
+    <div class="fake-body">
+      <div class="saicf-system-notice">
+        <span class="saicf-system-notice-text has-action"><span class="saicf-notice-line">You requested a live agent. Please wait<span
+          class="saicf-waiting-dot"></span><span class="saicf-waiting-dot"></span><span
+          class="saicf-waiting-dot"></span></span><button class="saicf-cancel-request" type="button">Cancel</button></span>
+      </div>
+    </div>
+  </div>
+  <!-- Real class names: the game clones .saicf-chat-footer .saicf-powered-by
+       into its own footer, so the harness has to carry that structure. -->
+  <div class="fake-footer saicf-chat-footer">
+    <div class="saicf-powered-by"><span class="saicf-powered-by-text">Powered by Ultimo Bots</span></div>
+    <div>Write a message...</div>
+  </div>
+</div>
+
+<div class="frame mobile" id="frame-mobile">
+  <div class="fake-header">Narrow 380px</div>
+  <div class="wrapper" id="wrap-mobile">
+    <div class="fake-body"></div>
+  </div>
+  <!-- Real class names: the game clones .saicf-chat-footer .saicf-powered-by
+       into its own footer, so the harness has to carry that structure. -->
+  <div class="fake-footer saicf-chat-footer">
+    <div class="saicf-powered-by"><span class="saicf-powered-by-text">Powered by Ultimo Bots</span></div>
+    <div>Write a message...</div>
+  </div>
+</div>
+
+<script type="module">
+  import { createGameCenter, gameStyles } from './index.js';
+
+  // Theme colour is the one knob the games take from bot config.
+  const THEME = new URLSearchParams(location.search).get('theme') || '#5e1bff';
+
+  const style = document.createElement('style');
+  style.textContent = gameStyles(THEME);
+  document.head.appendChild(style);
+  document.querySelectorAll('.fake-header').forEach((h) => { h.style.background = THEME; });
+
+  // offerDelayMs: 0 so the offer button is testable without waiting 25s.
+  // Mount on the frame (the .saicf-chat-window stand-in), not the wrapper.
+  const centers = ['desktop', 'mobile'].map((id) => createGameCenter({
+    mountTarget: document.getElementById(`frame-${id}`),
+    offerDelayMs: 0,
+  }));
+
+  // Desktop pane: exercise the real path (offer button injected into a notice).
+  centers[0].armOffer(document.querySelector('#frame-desktop .saicf-system-notice'));
+  // Mobile pane: open straight away so both states are visible in one shot.
+  window.__openMobile = () => centers[1].armOffer(document.querySelector('#frame-mobile .fake-body'));
+  window.__centers = centers;
+  // teardown() removes the offer button; this puts it back so a test can keep
+  // reopening until a specific game comes up in the random pick.
+  window.__rearm = () => centers[0].armOffer(document.querySelector('#frame-desktop .saicf-system-notice'));
+</script>

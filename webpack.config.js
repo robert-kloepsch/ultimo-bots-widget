@@ -11,7 +11,12 @@ module.exports = {
     clean: true,
     publicPath: '', // in most cases '' or './'; adjust if deploying to GitHub pages
   },
-  mode: 'development', // or 'production' for a minified build
+  // Minified. dist/bundle.js is what every non-Webflow customer downloads on
+  // every page view, so the unminified build was pure cost. Same setting as
+  // webpack.release.js, whose output already runs in production on Webflow.
+  // Trade-off: no source maps, so a browser stack trace shows minified names.
+  // Rebuild locally with mode:'development' when you need to debug one.
+  mode: 'production',
   module: {
     rules: [
       {

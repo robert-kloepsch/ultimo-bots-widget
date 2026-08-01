@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { createGameCenter, gameStyles } from './games/index.js';
 
 // Bundled, version-pinned (package.json) — the Webflow Marketplace requires
 // the shipped artifact to be self-contained: no runtime CDN imports. Exposed
@@ -932,6 +933,21 @@ async function initializeChatWidget() {
       align-items: center;
       gap: 6px;
       text-align: center;
+      max-width: 100%;
+    }
+    /* Pill that carries a button: becomes a centred column so the button sits
+       on its own line under the text + dots, inside the same grey container. */
+    .saicf-system-notice-text.has-action {
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 14px;
+    }
+    /* Inner row holding the text and the waiting dots. */
+    .saicf-notice-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
     .saicf-waiting-dot {
       width: 8px;
@@ -943,19 +959,25 @@ async function initializeChatWidget() {
     }
     .saicf-waiting-dot:nth-child(2) { animation-delay: .2s; }
     .saicf-waiting-dot:nth-child(3) { animation-delay: .4s; }
+    /* Lives inside .saicf-system-notice-text. Border is lighter than the old
+       standalone version because it now sits on #f0f0f0, not on white.
+       line-height carries the height so the pill does not grow. */
     .saicf-cancel-request {
-      background: none;
-      border: 1px solid #999;
+      background: #fff;
+      border: 1px solid #d5d5d5;
       color: #666;
       font-size: 11px;
-      padding: 3px 12px;
+      line-height: 19px;
+      padding: 0 16px;
       border-radius: 10px;
       cursor: pointer;
-      margin-top: 6px;
-      transition: background .2s, color .2s;
+      flex-shrink: 0;
+      white-space: nowrap;
+      transition: background .2s, color .2s, border-color .2s;
     }
     .saicf-cancel-request:hover {
-      background: #e0e0e0;
+      background: #e8e8e8;
+      border-color: #bbb;
       color: #333;
     }
     .saicf-confirm-overlay {
@@ -2641,6 +2663,7 @@ async function initializeChatWidget() {
       outline: none;
       border-color: ${themeColor};
     }
+    ${gameStyles(themeColor)}
   `;
   shadowRoot.appendChild(dynamicStyleEl);
 
@@ -2653,6 +2676,12 @@ async function initializeChatWidget() {
   chatBodyWrapper.className = 'saicf-chat-body-wrapper';
   chatBody.parentElement.insertBefore(chatBodyWrapper, chatBody);
   chatBodyWrapper.appendChild(chatBody);
+
+  // Waiting-room games. Mounted on the chat WINDOW, not the body wrapper: the
+  // game replaces everything under the header (disclosure strip, messages,
+  // quick replies, composer) so it gets the full height and never scrolls.
+  // Pure UI: it owns no live-chat state, see src/games/index.js.
+  const gameCenter = createGameCenter({ mountTarget: chatWindow });
 
   // Create spacer + sentinel elements for scroll positioning
   const bottomSpacerEl = document.createElement('div');
@@ -2882,6 +2911,9 @@ function toggleMenu(open) {
 
   function doClearChat() {
     // W17: Teardown live chat state for old session
+    // NB: this path sets liveSessionStatus directly and never goes through
+    // setLiveSessionStatusFn, so the game has to be torn down explicitly here.
+    gameCenter.teardown();
     stopHeartbeat();
     stopAgentPolling();
     hideAgentTyping();
@@ -3299,6 +3331,9 @@ function toggleMenu(open) {
   // Drop all live state so the next user action re-bootstraps with a fresh
   // session_id + token. Called on 401 from any token-protected endpoint.
   function resetLiveSessionForAuthFailure() {
+    // Same reason as doClearChat: liveSessionStatus is assigned directly below,
+    // bypassing setLiveSessionStatusFn and its teardown.
+    gameCenter.teardown();
     setStoredSessionToken(null);
     stopHeartbeat();
     stopAgentPolling();
@@ -3843,6 +3878,7 @@ function toggleMenu(open) {
           }
         } catch {}
         notice.remove();
+        gameCenter.teardown();
         liveSessionStatus = 'active';
         agentRequestPending = false;
         stopAgentPolling();
@@ -3865,6 +3901,8 @@ function toggleMenu(open) {
     }
     scrollToBottomHard();
     startAgentPolling();
+    // Offer a game, but not right away — see DEFAULT_OFFER_DELAY_MS.
+    gameCenter.armOffer(waitingNotice);
   }
 
   // ── Live chat: Confirm disconnecting from a joined agent. Reuses the same
@@ -3929,7 +3967,15 @@ function toggleMenu(open) {
       cancelBtn.className = 'saicf-cancel-request';
       cancelBtn.textContent = 'Cancel';
       cancelBtn.addEventListener('click', () => onCancel(notice));
-      notice.appendChild(cancelBtn);
+      // Inside the grey pill, on its own centred line below the text + dots.
+      // The text and dots move into an inner row first, otherwise the pill's
+      // column direction would stack each dot onto its own line.
+      const line = document.createElement('span');
+      line.className = 'saicf-notice-line';
+      while (span.firstChild) line.appendChild(span.firstChild);
+      span.appendChild(line);
+      span.classList.add('has-action');
+      span.appendChild(cancelBtn);
     }
     chatBody.insertBefore(notice, bottomSpacerEl);
     scrollToBottom();
@@ -3938,6 +3984,14 @@ function toggleMenu(open) {
 
   // ── Live chat: Centralized status transition (W6) ──
   function setLiveSessionStatusFn(newStatus) {
+    // Any exit from the queue kills the game, before the early-return guard
+    // below and before any branch. This is the single choke point all three
+    // "agent is here" signals funnel through (WS `live_agent_joined`,
+    // `widget_init_ack`, and the polling fallback), so one call covers them
+    // all. The game vanishing IS the arrival notification — do not soften it
+    // into a dismissible banner over the board.
+    if (newStatus !== 'agent_requested') gameCenter.teardown();
+
     // Handshake: regardless of whether we're transitioning or already in
     // agent_joined state, every "agent joined" signal from the backend is a
     // reason to re-ack the portal. This makes leave→rejoin cycles robust

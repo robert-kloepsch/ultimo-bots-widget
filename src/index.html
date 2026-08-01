@@ -8,6 +8,11 @@
 <body>
     <div id="chat-widget-container" data-user-id="17484411083762250247QKLKy">
     </div>
-    <script src="index.js"></script>
+    <!-- No <script> tag here on purpose: HtmlWebpackPlugin injects
+         <script defer src="bundle.js"> into <head> at build time. A hardcoded
+         <script src="index.js"> used to sit here from the pre-webpack days —
+         it 404'd in dist/, and opening src/index.html directly loaded the raw
+         ESM source as a classic script ("Cannot use import statement outside
+         a module"). Build with `npx webpack` and open dist/index.html. -->
   </body>
 </html>
