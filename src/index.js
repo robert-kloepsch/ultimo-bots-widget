@@ -3366,6 +3366,9 @@ function toggleMenu(open) {
   let wsConnecting = false;
   let wsReconnectDelay = 1000;
   let wsReconnectTimer = null;
+  // W16: consecutive widget_init token rejections (auth_error frames with
+  // reason 'invalid session_token'). See the auth_error case for the policy.
+  let wsAuthFailStreak = 0;
   let visitorTypingTimer = null;
   let visitorIsTyping = false;
   let agentTypingRow = null; // the typing indicator DOM element
@@ -3392,7 +3395,10 @@ function toggleMenu(open) {
     liveWs.addEventListener('open', () => {
       wsConnecting = false;
       wsConnected = true;
-      wsReconnectDelay = 1000; // reset backoff on successful connect
+      // W16: do NOT reset the backoff here. A 4401 auth rejection closes the
+      // socket AFTER a successful open, so resetting on open would pin the
+      // reconnect delay at ~1s forever (widget_init → 4401 → reconnect loop
+      // hammering the backend). The backoff resets on widget_init_ack instead.
       liveWs.send(JSON.stringify({
         type: 'widget_init',
         session_id: sessionId,
@@ -3412,6 +3418,10 @@ function toggleMenu(open) {
           // W2: WS handshake is now complete. Demote safety-net polling
           // cadence and let pollAgentMessages pick up the slower interval.
           wsAuthenticated = true;
+          // W16: handshake succeeded — NOW reset the reconnect backoff and
+          // the token-rejection streak (not on 'open', see comment there).
+          wsReconnectDelay = 1000;
+          wsAuthFailStreak = 0;
           restartAgentPollingWithCurrentInterval();
           // Handshake: backend confirms our widget WS is registered and echoes
           // the current session status. If the backend says an agent is
@@ -3523,6 +3533,30 @@ function toggleMenu(open) {
         }
         case 'ping': {
           wsSend({ type: 'pong' });
+          break;
+        }
+        case 'auth_error': {
+          // W16: the backend rejected our widget_init session_token and is
+          // about to close the socket with 4401. Without this case the close
+          // is treated as a transient disconnect and the widget reconnects
+          // forever (~1s cadence), never healing. Two situations:
+          //   - we HOLD a token and it was rejected → it is stale; retrying
+          //     can never fix it. Reset immediately (rotates session_id +
+          //     drops the token, same recovery as an HTTP 401).
+          //   - we hold NO token → most likely the first-heartbeat response
+          //     (which delivers the minted token) is still in flight; the
+          //     next backoff reconnect will carry it. Only reset after the
+          //     3rd consecutive rejection (token never arrived, e.g. the
+          //     first-heartbeat response was lost to a page navigation).
+          // Other auth_error reasons (e.g. a transient Redis lookup failure
+          // server-side) fall through to the normal backoff reconnect.
+          if (event.reason === 'invalid session_token') {
+            wsAuthFailStreak += 1;
+            if (getStoredSessionToken() || wsAuthFailStreak >= 3) {
+              wsAuthFailStreak = 0;
+              resetLiveSessionForAuthFailure();
+            }
+          }
           break;
         }
       }
