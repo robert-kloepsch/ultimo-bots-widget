@@ -668,10 +668,45 @@ async function initializeChatWidget() {
       padding: 0 var(--saicf-gutter) 8px;
       overflow-y: auto;
       overflow-anchor: none;
+      /* Reaching the top/bottom of the chat must never scroll the HOST page
+         (the widget embeds on customer sites). */
+      overscroll-behavior: contain;
       display: flex;
       flex-direction: column;
       background-color: white;
       position: relative;
+    }
+    /* ── Thin, unobtrusive scrollbar ──
+       Two mutually exclusive paths (per spec, standard props disable the
+       webkit pseudo-element styling wherever both are supported):
+       1. Standard CSS Scrollbars (Firefox, Chromium 121+, Safari 18.2+):
+          thin native bar, translucent thumb, no track.
+       2. Older Chromium/WebKit (embedded webviews): webkit pseudo-elements.
+       iOS/Android overlay scrollbars are already thin + auto-hiding and
+       ignore most of this — nothing breaks there. */
+    .saicf-chat-body,
+    .saicf-chat-input {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+    }
+    @supports not (scrollbar-width: thin) {
+      .saicf-chat-body::-webkit-scrollbar,
+      .saicf-chat-input::-webkit-scrollbar {
+        width: 6px;
+      }
+      .saicf-chat-body::-webkit-scrollbar-track,
+      .saicf-chat-input::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .saicf-chat-body::-webkit-scrollbar-thumb,
+      .saicf-chat-input::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.22);
+        border-radius: 8px;
+      }
+      .saicf-chat-body::-webkit-scrollbar-thumb:hover,
+      .saicf-chat-input::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.35);
+      }
     }
     .saicf-scroll-to-bottom-btn {
       position: absolute;
@@ -1076,6 +1111,140 @@ async function initializeChatWidget() {
     }
     .saicf-loading-dots div:nth-child(3) {
       animation-delay: 0.4s;
+    }
+    /* ── Agent activity timeline (SSE "status" events, Perplexity-style) ──
+       Ported 1:1 from the portal chat modal (chatModal.css .chat-status-*).
+       Rendered as a bot-message row (avatar + bubble) from the first frame
+       after send — replaces the loading dots on the AI path. Rules:
+       - fixed 26px row height, rows never wrap (details ellipsize) -> the
+         block only grows by exact row increments the spacer absorbs;
+       - completed rows check off in place; only the last row pulses;
+       - on answer start the bubble fades as ONE piece, then folds shut
+         while already invisible (the avatar sits OUTSIDE it and never
+         moves); the answer is buffered during the fade and then TYPED
+         from its first word by the reveal loop.
+       Accent color rides --saicf-status-rgb (set from theme_color in the
+       themed CSS block, fallback = portal purple). */
+    /* Geometry mirrors .saicf-message-row / .saicf-widget-message EXACTLY so
+       the first step sits on the same baseline as the avatar, the welcome
+       message and the answer that replaces it: row margin 6px + timeline
+       margin 7px + half a 26px row = 20px, which is the avatar's centre
+       (margin-top 7px + half of 24px+2px border). */
+    .saicf-status-row {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 0px;
+      margin: 6px 0;
+      animation: saicf-status-bubble-in 0.28s cubic-bezier(0.25, 0.9, 0.3, 1);
+    }
+    @keyframes saicf-status-bubble-in {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .saicf-status-timeline {
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-radius: 10px;
+      margin: 7px 0;
+      padding: 0 5px;
+      max-width: calc(100% - 48px);
+      max-height: 280px;
+      overflow: hidden;
+    }
+    /* No avatar in front -> flush with the gutter, exactly like a bot bubble
+       (.saicf-message-row.bot > .saicf-widget-message:first-child). */
+    .saicf-status-row > .saicf-status-timeline:first-child {
+      padding-left: 0;
+    }
+    .saicf-status-timeline.collapsing {
+      max-height: 0;
+      margin-top: 0;
+      margin-bottom: 0;
+      opacity: 0;
+      transition: opacity 0.24s ease,
+                  max-height 0.2s ease 0.24s, margin 0.2s ease 0.24s;
+    }
+    .saicf-status-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 26px;
+      flex-shrink: 0;
+      font-size: 13px;
+      color: #6b6b76;
+      white-space: nowrap;
+      overflow: hidden;
+      /* Entry animates OPACITY/TRANSFORM ONLY — never height. An animated
+         height desynchronizes the spacer (it measures 0px at insert, the row
+         then grows unwatched, the next recalc snaps back) and the scrollbar
+         thumb dances through every status update. Fixed 26px from the first
+         frame keeps every measurement deterministic. */
+      animation: saicf-status-row-in 0.2s ease;
+    }
+    @keyframes saicf-status-row-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .saicf-status-icon {
+      width: 15px;
+      height: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: rgb(var(--saicf-status-rgb, 86, 22, 234));
+      flex-shrink: 0;
+    }
+    .saicf-status-icon svg {
+      animation: saicf-status-check-pop 0.22s cubic-bezier(0.3, 1.4, 0.5, 1);
+    }
+    @keyframes saicf-status-check-pop {
+      from { transform: scale(0.4); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+    .saicf-status-step.done {
+      color: #9a9aa5;
+    }
+    .saicf-status-step.done .saicf-status-icon {
+      opacity: 0.6;
+    }
+    .saicf-status-step.active .saicf-status-label {
+      background: linear-gradient(90deg, #55555e 0%, #55555e 40%, rgba(var(--saicf-status-rgb, 86, 22, 234), 0.45) 50%, #55555e 60%, #55555e 100%);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: saicf-status-shimmer 1.6s linear infinite;
+    }
+    @keyframes saicf-status-shimmer {
+      from { background-position: 200% 0; }
+      to   { background-position: 0% 0; }
+    }
+    .saicf-status-pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgb(var(--saicf-status-rgb, 86, 22, 234));
+      box-shadow: 0 0 0 0 rgba(var(--saicf-status-rgb, 86, 22, 234), 0.35);
+      animation: saicf-status-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes saicf-status-pulse {
+      0%   { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(var(--saicf-status-rgb, 86, 22, 234), 0.35); }
+      55%  { transform: scale(1);   box-shadow: 0 0 0 5px rgba(var(--saicf-status-rgb, 86, 22, 234), 0); }
+      100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(var(--saicf-status-rgb, 86, 22, 234), 0); }
+    }
+    .saicf-status-detail {
+      font-size: 12.5px;
+      font-style: italic;
+      color: #8a8a95;
+      margin-left: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .saicf-status-step.active .saicf-status-detail {
+      color: #75758a;
     }
     .saicf-chat-widget-icon.align-left {
       left: 25px !important;
@@ -2250,6 +2419,10 @@ async function initializeChatWidget() {
   // unreadable on theme_color (WCAG AA < 4.5), fall back to whichever of
   // white/black wins, so the label is always legible.
   const liveCtaColors = deriveLiveCtaColors(themeColor, headerFontColor);
+  // Status-timeline accent as an "r, g, b" triplet for the CSS var
+  // --saicf-status-rgb (rgba() shadows + text gradients need raw channels).
+  const _statusRgbObj = _hexToRgb(themeColor) || { r: 86, g: 22, b: 234 };
+  const statusAccentRgb = `${_statusRgbObj.r}, ${_statusRgbObj.g}, ${_statusRgbObj.b}`;
   const welcomeMessages     = widgetConfig.welcome_message
             ? Array.isArray(widgetConfig.welcome_message)
               ? widgetConfig.welcome_message
@@ -2605,6 +2778,11 @@ async function initializeChatWidget() {
     }
     .saicf-loading-dots div {
       background-color: ${themeColor} !important;
+    }
+    /* Status-timeline accent (pulse, check, shimmer highlight) follows the
+       customer's theme color; rgb triplet so rgba() shadows/gradients work. */
+    .saicf-chat-window {
+      --saicf-status-rgb: ${statusAccentRgb};
     }
     .saicf-config-spinner {
       color: ${themeColor};
@@ -2979,6 +3157,12 @@ function toggleMenu(open) {
     spacerActive = false;
     programmaticScroll = false;
     pendingUserScroll = false;
+    smoothScrollTarget = null;
+    userScrolledAway = false;
+    // A cleared chat has nothing to scroll to — the arrow must never
+    // survive the clear (it lives in the wrapper, not in chatBody).
+    statusTimelineRemove();
+    scrollDownBtn.classList.remove('visible');
 
     const loadingRow = chatBody.querySelector('.saicf-loading-row');
     if (loadingRow) {
@@ -3040,7 +3224,19 @@ function toggleMenu(open) {
   let userScrolledAway = false;
   let ignoreScrollEvents = false;
   let smoothScrollTarget = null; // store target so completion check is exact
+  // Agent activity timeline state (functions live next to setLoading below;
+  // declared here because updateScrollDownVisibility reads statusCollapsing).
+  let statusRowEl = null;        // the .saicf-status-row block (avatar + bubble)
+  let statusListEl = null;       // the .saicf-status-timeline bubble
+  let statusStepEls = new Map(); // step key -> row element (insertion-ordered)
+  let statusCollapsing = false;  // fade-out running; buffer, don't render text
+  let statusCollapseTimer = null;
+  let statusDetailTimer = null;  // typewriter for the newest step's detail
   const TOP_MARGIN = 6;
+  // The chat body's bottom padding inflates scrollHeight but sits BELOW the
+  // spacer — unaccounted it puts the pinned position exactly that many px
+  // above the absolute bottom (leftover scrollbar travel after the arrow).
+  const CHAT_BODY_PAD_BOTTOM = parseFloat(getComputedStyle(chatBody).paddingBottom) || 0;
   const isMobile = window.matchMedia('(max-width: 768px)').matches;
 
   // Recalculate spacer so user message stays at top.
@@ -3064,7 +3260,9 @@ function toggleMenu(open) {
     const msgOffsetTop = lastUserMsg.offsetTop;  // constant during streaming
     const naturalContentH = bottomSpacerEl.offsetTop;
     const contentBelowUserMsg = naturalContentH - msgOffsetTop;
-    const neededSpacer = Math.max(0, containerH - contentBelowUserMsg - TOP_MARGIN);
+    // Includes the body's bottom padding so the pinned position IS the
+    // absolute scroll bottom (no leftover travel after the arrow click).
+    const neededSpacer = Math.max(0, containerH - contentBelowUserMsg - TOP_MARGIN - CHAT_BODY_PAD_BOTTOM);
     bottomSpacerEl.style.height = neededSpacer + 'px';
     spacerActive = neededSpacer > 0;
 
@@ -3095,6 +3293,12 @@ function toggleMenu(open) {
     if (!chatBody || !pendingUserScroll) return;
     pendingUserScroll = false;
 
+    // Collapsing the spacer to re-measure clamps scrollTop upward whenever
+    // the raw content is shorter than the viewport — remember the visitor's
+    // position and restore it after sizing, or the smooth scroll below
+    // starts at the TOP and visibly rides down the whole history.
+    const prevScrollTop = chatBody.scrollTop;
+
     // Reset spacer for fresh measurement
     bottomSpacerEl.style.height = '0px';
     spacerActive = false;
@@ -3103,6 +3307,7 @@ function toggleMenu(open) {
     // skips its instant anchor — we want a smooth scroll instead.
     programmaticScroll = true;
     recalcSpacer();
+    chatBody.scrollTop = prevScrollTop;
 
     if (spacerActive) {
       // Scroll to the exact anchor value (msgOffsetTop - TOP_MARGIN),
@@ -3122,6 +3327,13 @@ function toggleMenu(open) {
     if (!chatBody) return;
     // Hide during smooth scroll animation
     if (programmaticScroll) {
+      scrollDownBtn.classList.remove('visible');
+      return;
+    }
+    // And during the status-timeline fade-out: the pre-grown spacer makes
+    // the bottom-distance momentarily equal the block height, which would
+    // flash the arrow for the 460ms hand-off.
+    if (statusCollapsing) {
       scrollDownBtn.classList.remove('visible');
       return;
     }
@@ -3221,9 +3433,15 @@ function toggleMenu(open) {
       if (!chatWindow.classList.contains('show')) return;
       applyViewportFit();
       // The window just shrank/grew with the keyboard — keep the newest
-      // message visible while the visitor is typing.
+      // message visible while the visitor is typing. ONLY when the visitor
+      // is already at the bottom: this also fires on plain input focus (see
+      // the safety net below), and yanking someone who deliberately scrolled
+      // up back to the newest message just because they clicked the input
+      // would throw away their reading position.
       const active = widgetRoot.getRootNode().activeElement;
-      if (active === chatInput) requestAnimationFrame(() => scrollToBottom());
+      const atBottom =
+        chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 40;
+      if (active === chatInput && atBottom) requestAnimationFrame(() => scrollToBottom());
     };
     visualVP.addEventListener('resize', onViewportChange);
     visualVP.addEventListener('scroll', onViewportChange);
@@ -4640,14 +4858,29 @@ function toggleMenu(open) {
     hideAgentBar();
 
     setBusy(true);
-    setLoading(true);
+    // Activity timeline replaces the loading dots on the AI path: avatar +
+    // "Analyzing your question…" from the very first frame after send.
+    statusTimelineShow();
 
     // Trigger positioning after DOM is updated
     doPositioning();
 
     let currentBotMessage = '';
     let currentBotProducts = null;
+    // Smooth character-reveal of the answer (ported from the portal chat
+    // modal): the fade-out buffers ~0.5s of text and SSE arrives in bursts —
+    // the reveal loop types the buffer a few characters per tick instead,
+    // so the answer always starts at its first word and streams smoothly.
+    let displayedLen = 0;
+    let answerDone = false;
+    let revealTimer = null;
+    let revealActive = false;
     resetStreamingBotMessage();
+
+    const stopReveal = () => {
+      if (revealTimer) { clearInterval(revealTimer); revealTimer = null; }
+      revealActive = false;
+    };
 
     const url =
       `https://portal.ultimo-bots.com/api/chatbot_response?` +
@@ -4657,11 +4890,21 @@ function toggleMenu(open) {
     const finish = () => {
       setLoading(false);
       setBusy(false);
+      stopReveal();
+      statusTimelineRemove();
       isStreamingState = false;
       saveChatHistory();
       resetStreamingBotMessage();
       recalcSpacer();
       updateScrollDownVisibility();
+      // Hand the cursor straight back to the visitor: the input was disabled
+      // while the assistant answered, so it lost focus. preventScroll keeps
+      // the browser from scrolling the input into view (which would move the
+      // message list). Desktop only — on mobile this would pop the on-screen
+      // keyboard open unasked and cover half the conversation.
+      if (!isMobile && !chatInput.disabled) {
+        try { chatInput.focus({ preventScroll: true }); } catch { chatInput.focus(); }
+      }
     };
 
     // Error messages for different error types
@@ -4678,16 +4921,54 @@ function toggleMenu(open) {
       const es = new EventSource(url);
       let firstChunk = true;
       let hasError = false;
+      let finalized = false;
+
+      const finalizeReply = () => {
+        if (finalized) return;
+        finalized = true;
+        stopReveal();
+        if (currentBotMessage) {
+          updateStreamingBotMessage(currentBotMessage);
+        } else if (streamingBotRow && currentBotProducts) {
+          // Products-only reply: drop the empty text bubble, keep the gallery.
+          const emptyBubble = streamingBotRow.querySelector('.widget-bot-message');
+          if (emptyBubble && !emptyBubble.textContent.trim()) emptyBubble.remove();
+        } else {
+          // No bot content — remove streaming placeholder without creating an empty bubble
+          resetStreamingBotMessage();
+        }
+        finish();
+        resolve();
+      };
+
+      const startReveal = () => {
+        if (revealTimer) clearInterval(revealTimer);
+        revealActive = true;
+        revealTimer = setInterval(() => {
+          if (displayedLen < currentBotMessage.length) {
+            const backlog = currentBotMessage.length - displayedLen;
+            displayedLen = Math.min(
+              currentBotMessage.length,
+              displayedLen + Math.max(1, Math.ceil(backlog / 25))
+            );
+            updateStreamingBotMessage(currentBotMessage.slice(0, displayedLen));
+          } else if (answerDone) {
+            finalizeReply();
+          }
+        }, 30);
+      };
 
       es.onmessage = ({ data: chunk }) => {
         if (chunk === 'end of response') return;
         if (firstChunk) {
           // If smooth scroll is still animating, snap to final position
-          // BEFORE any DOM mutations. Removing loading dots drops
-          // scrollHeight, causing the browser to clamp scrollTop
+          // BEFORE any DOM mutations. A shrinking/growing scrollHeight
+          // mid-animation causes the browser to clamp scrollTop
           // synchronously — disrupting the animation and shifting the
           // user message down. By snapping first, we own the scrollTop
-          // value and recalcSpacer can re-anchor correctly.
+          // value and recalcSpacer can re-anchor correctly. (This also
+          // retires the smooth-scroll-in-flight flag, so the scroll-down
+          // arrow logic runs live during the whole answer.)
           if (programmaticScroll && !userScrolledAway) {
             programmaticScroll = false;
             smoothScrollTarget = null;
@@ -4704,12 +4985,35 @@ function toggleMenu(open) {
             programmaticScroll = false;
             smoothScrollTarget = null;
           }
-          setLoading(false);
           firstChunk = false;
+          // The answer is starting: fade the timeline out (text keeps
+          // buffering meanwhile), then swap in the answer typing from its
+          // first characters. One element owns the stage at a time — the
+          // no-flicker contract from the portal chat modal.
+          statusTimelineCollapse(() => {
+            displayedLen = Math.min(2, currentBotMessage.length);
+            updateStreamingBotMessage(currentBotMessage.slice(0, displayedLen));
+            if (currentBotProducts) attachProductsToStreamingRow(currentBotProducts);
+            startReveal();
+          });
         }
         currentBotMessage += chunk.replace(/<newline>/g, '\n');
-        updateStreamingBotMessage(currentBotMessage);
+        // While the timeline fades and while the reveal loop is typing, the
+        // buffer is the single source of truth — no direct rendering here.
       };
+
+      // Agent activity timeline: server-localized steps for what the agent is
+      // doing right now ({key, label, phase, detail?, transient?}) — rendered
+      // only while we are still waiting for the answer.
+      es.addEventListener('status', ({ data }) => {
+        if (!firstChunk) return;
+        try {
+          const step = JSON.parse(data)?.status;
+          statusUpsertStep(step);
+        } catch (err) {
+          console.warn('Could not parse status event:', err);
+        }
+      });
 
       // Structured product cards ride a dedicated SSE event so the text stream
       // stays pure markdown. They normally arrive after the answer text; attach
@@ -4719,7 +5023,9 @@ function toggleMenu(open) {
           const parsed = JSON.parse(data);
           if (Array.isArray(parsed.products) && parsed.products.length > 0) {
             currentBotProducts = parsed.products;
-            attachProductsToStreamingRow(currentBotProducts);
+            // During the fade-out the timeline still owns the stage — the
+            // collapse callback attaches the gallery right after the swap.
+            if (!statusCollapsing) attachProductsToStreamingRow(currentBotProducts);
           }
         } catch (err) {
           console.warn('Could not parse products event:', err);
@@ -4727,26 +5033,25 @@ function toggleMenu(open) {
       });
 
       es.addEventListener('end', () => {
-        if (!hasError) {
-          if (currentBotMessage) {
-            updateStreamingBotMessage(currentBotMessage);
-          } else if (streamingBotRow && currentBotProducts) {
-            // Products-only reply: drop the empty text bubble, keep the gallery.
-            const emptyBubble = streamingBotRow.querySelector('.widget-bot-message');
-            if (emptyBubble && !emptyBubble.textContent.trim()) emptyBubble.remove();
-          } else {
-            // No bot content — remove streaming placeholder without creating an empty bubble
-            resetStreamingBotMessage();
-          }
-        }
         es.close();
-        finish();
-        resolve();
+        if (hasError) return; // the error path already finalized
+        answerDone = true;
+        // A running fade-out/reveal finishes typing the buffer first
+        // (finalizeReply fires from the reveal tick once caught up);
+        // finalize immediately only when nothing is animating.
+        if (!statusCollapsing && !revealActive) {
+          finalizeReply();
+        }
       });
 
       es.addEventListener('error', (e) => {
         hasError = true;
         es.close();
+        stopReveal();
+        statusTimelineRemove();
+        // Show whatever partial answer was buffered before the error, then
+        // the error bubble under it.
+        if (currentBotMessage) updateStreamingBotMessage(currentBotMessage);
         resetStreamingBotMessage();
 
         // Parse the error data (now sent as JSON)
@@ -5612,6 +5917,167 @@ function toggleMenu(open) {
     }
     setTimeout(() => { chatBody.scrollTop = chatBody.scrollHeight; }, 120);
     setTimeout(() => { chatBody.scrollTop = chatBody.scrollHeight; }, 360);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Agent activity timeline (SSE `status` events) — vanilla port of the
+  // portal chat modal's Perplexity-style timeline. Protocol per event:
+  // {key, label, phase: active|done, detail?, transient?}. All steps PERSIST
+  // (only the LAST row pulses, earlier rows check off in place); a mid-list
+  // transient filler is never re-activated; a new step replaces a trailing
+  // transient. The composed search query (`detail`) types out live. On answer
+  // start the bubble fades as one piece, folds while invisible, and the
+  // buffered answer is typed from its first word (see sendMessage).
+  // ─────────────────────────────────────────────────────────────────────────
+  const STATUS_ANALYZING_LABELS = {
+    en: 'Analyzing your question…', de: 'Analysiere deine Frage…',
+    fr: 'Analyse de votre question…', es: 'Analizando tu pregunta…',
+    it: 'Analizza la tua domanda…', pt: 'Analisando sua pergunta…',
+    nl: 'Analyseert je vraag…', pl: 'Analizuje twoje pytanie…',
+  };
+  // Local placeholder shown the instant the visitor sends (the server's own
+  // "analyzing" event upserts it ~0.5s later, localized by the model's
+  // language signal). Browser language is the best first guess we have.
+  function statusAnalyzingLabel() {
+    const lang = (navigator.language || 'en').slice(0, 2).toLowerCase();
+    return STATUS_ANALYZING_LABELS[lang] || STATUS_ANALYZING_LABELS.en;
+  }
+
+  const STATUS_CHECK_SVG =
+    '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">' +
+    '<path d="M2 6.2 4.8 9 10 3.4" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function statusTimelineShow() {
+    statusTimelineRemove(); // fresh reply -> fresh timeline
+    statusRowEl = document.createElement('div');
+    statusRowEl.className = 'saicf-status-row';
+    if (avatar) {
+      // Same avatar markup as a bot message row — the answer that replaces
+      // this block mounts an identical avatar in the identical position,
+      // so the hand-off leaves the avatar visually untouched.
+      const avatarEl = document.createElement('div');
+      avatarEl.className = 'saicf-message-avatar';
+      avatarEl.style.backgroundImage = `url("${avatar}")`;
+      statusRowEl.appendChild(avatarEl);
+    }
+    statusListEl = document.createElement('div');
+    statusListEl.className = 'saicf-status-timeline';
+    statusRowEl.appendChild(statusListEl);
+    chatBody.insertBefore(statusRowEl, bottomSpacerEl);
+    statusUpsertStep({ key: 'analyzing', label: statusAnalyzingLabel(), phase: 'active', transient: true });
+    if (!pendingUserScroll) scrollToBottom();
+  }
+
+  function statusBuildRow(step) {
+    const row = document.createElement('div');
+    row.className = 'saicf-status-step';
+    if (step.transient) row.dataset.transient = '1';
+    const icon = document.createElement('span');
+    icon.className = 'saicf-status-icon';
+    const label = document.createElement('span');
+    label.className = 'saicf-status-label';
+    label.textContent = step.label || '';
+    const detail = document.createElement('span');
+    detail.className = 'saicf-status-detail';
+    row.appendChild(icon);
+    row.appendChild(label);
+    row.appendChild(detail);
+    return row;
+  }
+
+  // Exactly ONE row pulses — the last; every earlier row carries the check.
+  function statusRefreshStates() {
+    const rows = Array.from(statusStepEls.values());
+    rows.forEach((row, i) => {
+      const active = i === rows.length - 1 && !statusCollapsing;
+      row.classList.toggle('active', active);
+      row.classList.toggle('done', !active);
+      const icon = row.querySelector('.saicf-status-icon');
+      if (!icon) return;
+      if (active && !icon.querySelector('.saicf-status-pulse')) {
+        icon.innerHTML = '<span class="saicf-status-pulse"></span>';
+      } else if (!active && !icon.querySelector('svg')) {
+        icon.innerHTML = STATUS_CHECK_SVG;
+      }
+    });
+  }
+
+  // Typewriter for the newest step's detail (the agent's composed search
+  // query) — a few characters per tick, so the visitor watches their words
+  // become a research query. One active typewriter at a time is plenty.
+  function statusTypeDetail(row, detail) {
+    const el = row.querySelector('.saicf-status-detail');
+    if (!el || el.dataset.full === detail) return;
+    el.dataset.full = detail;
+    if (statusDetailTimer) { clearInterval(statusDetailTimer); statusDetailTimer = null; }
+    let shown = 0;
+    statusDetailTimer = setInterval(() => {
+      shown += 2;
+      el.textContent = '“' + detail.slice(0, shown) + '”';
+      if (shown >= detail.length) { clearInterval(statusDetailTimer); statusDetailTimer = null; }
+    }, 24);
+  }
+
+  function statusUpsertStep(step) {
+    if (!statusListEl || statusCollapsing || !step || !step.key || !step.label) return;
+    let row = statusStepEls.get(step.key);
+    const rows = Array.from(statusStepEls.values());
+    if (row) {
+      // A transient filler that already sits mid-list stays history — the
+      // timeline only ever moves forward.
+      if (step.transient && row !== rows[rows.length - 1]) return;
+      const label = row.querySelector('.saicf-status-label');
+      if (label) label.textContent = step.label;
+    } else {
+      // EVERY step persists — including the "Analyzing…" / "Processing…"
+      // fillers: the timeline only ever grows downward, and a finished step
+      // keeps its place and gets the green check (statusRefreshStates).
+      row = statusBuildRow(step);
+      statusStepEls.set(step.key, row);
+      statusListEl.appendChild(row);
+    }
+    statusRefreshStates();
+    if (step.detail) statusTypeDetail(row, step.detail);
+    // Each 26px increment is absorbed by the spacer in the same tick — the
+    // no-jump contract. Deliberately ALSO while the send smooth-scroll is in
+    // flight: recalcSpacer skips its scrollTop anchor in that state and only
+    // resizes the spacer, keeping scrollHeight constant so the animation's
+    // target stays valid and the scrollbar never moves.
+    if (spacerActive) recalcSpacer();
+    updateScrollDownVisibility();
+  }
+
+  // Fade the bubble out (one piece), fold it while invisible, then hand the
+  // stage to the buffered answer. The bottom spacer is pre-grown by the
+  // block's exact height so scrollHeight can never SHRINK mid-transition —
+  // a shrinking scrollHeight clamps scrollTop frame by frame and the whole
+  // chat trembles (same contract as the portal chat modal).
+  function statusTimelineCollapse(onDone) {
+    if (!statusRowEl || !statusListEl) { onDone(); return; }
+    const blockH = statusRowEl.offsetHeight;
+    const current = parseFloat(bottomSpacerEl.style.height || '0') || 0;
+    bottomSpacerEl.style.height = (current + blockH) + 'px';
+    spacerActive = true;
+    statusCollapsing = true;
+    statusRefreshStates();
+    statusListEl.classList.add('collapsing');
+    if (statusCollapseTimer) clearTimeout(statusCollapseTimer);
+    // Timer must outlast the CSS fade+fold (ends ~440ms).
+    statusCollapseTimer = setTimeout(() => {
+      statusTimelineRemove();
+      onDone();
+    }, 460);
+  }
+
+  function statusTimelineRemove() {
+    if (statusCollapseTimer) { clearTimeout(statusCollapseTimer); statusCollapseTimer = null; }
+    if (statusDetailTimer) { clearInterval(statusDetailTimer); statusDetailTimer = null; }
+    if (statusRowEl) statusRowEl.remove();
+    statusRowEl = null;
+    statusListEl = null;
+    statusStepEls = new Map();
+    statusCollapsing = false;
   }
 
   function setLoading(isLoading) {
