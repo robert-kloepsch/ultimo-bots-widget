@@ -20,9 +20,9 @@ is the deploy. Plan accordingly.
 
 ## Stack
 
-- **Vanilla JavaScript** in one ~4.1k-line file ([`src/index.js`](src/index.js))
+- **Vanilla JavaScript** in one ~6.2k-line file ([`src/index.js`](src/index.js))
 - **webpack 5** ([`webpack.config.js`](webpack.config.js)). Entry `src/index.js` → output `dist/bundle.js`
-- **Bundle mode: `development`** for `dist/bundle.js` — committed bundle is NOT minified. Known issue.
+- **Bundle mode: `production`** ([`webpack.config.js:19`](webpack.config.js)) — the committed bundle IS minified (~206 KB). Rebuild locally with `mode: 'development'` when you need to debug one.
 - **Bundled deps** — `marked@11.1.1` + `dompurify@3.1.6` are real npm dependencies, statically imported (since 2026-07, Webflow Marketplace requires a self-contained artifact; the old runtime jsdelivr imports are gone)
 - **Release build** — `npm run build:release` ([`webpack.release.js`](webpack.release.js)) emits the minified, versioned artifact `release/<version>/ultimo-widget.js` that is published to the `ultimo-bots-cdn` repo (GitHub Pages behind `widget.ultimo-bots.com`) and registered with Webflow via SRI hash. Published versions are IMMUTABLE — bump `package.json` version for a new release and update the backend's `WIDGET_VERSION`/`WIDGET_INTEGRITY_HASH` (`ultimo-bots-backend/src/controller/webflow.py`) in lockstep.
 - **Shadow DOM** + `:host { all: initial }` for full isolation
@@ -55,13 +55,13 @@ aggressively; propagation can take minutes.
 
 ```
 src/
-├── index.js                    # ★ the entire widget — 4125 LOC
+├── index.js                    # ★ the entire widget — 6250 LOC
 ├── widget.css                  # informational — runtime CSS is inlined into index.js
 ├── index.html                  # webpack template (built into dist/)
 ├── home/about/services/contact.html   # legacy demo pages — unused
 └── cloud.png
 dist/
-├── bundle.js                   # ★ 165 KB — production widget (committed to git)
+├── bundle.js                   # ★ ~206 KB minified — production widget (committed to git)
 └── index.html
 ```
 
@@ -126,6 +126,7 @@ below is about the shared live-agent state machine, not every gallery affordance
 - **Keep the `saicf-` class prefix.** Renaming breaks every selector and any partner integration targeting the widget.
 - **`marked` / `DOMPurify` are bundled — never reintroduce runtime CDN imports.** The Webflow Marketplace rejected the runtime-loading delivery chain (2026-07); the artifact must stay self-contained. (`ensureMarked()`/`loadDompurify()` remain as awaited no-ops.)
 - **`pointer-events: none` on the host container** + visible elements opt back in. Lets customers click through the invisible bounding box.
+- **Never drop `display: 'block'` from the host container's inline style** ([`src/index.js:291`](src/index.js)). The host has NO light-DOM children, so it matches `:empty` — and Shopify's Dawn ships `div:empty { display: none }` in `base.css`, which hid the entire widget on every Dawn store. An inline declaration outranks any normal author rule, which is the whole fix. Keep it **without** `!important` so a site that hides the widget on purpose still wins. See Known traps.
 - **Hardcoded backend URLs** — don't add relative URLs (widget runs on customer domains).
 - **`z-index: 2147483647`** is intentional (max signed int32). Don't reduce.
 - **Per-bot key prefixes** for any new storage key (`{key}-{botId}`).
@@ -137,7 +138,7 @@ below is about the shared live-agent state machine, not every gallery affordance
 
 The widget can drop into a host page before DOM ready, before the host
 bundler injects the container, or inside a Wix/Webflow async-injecting
-runtime. [`src/index.js:113–152`](src/index.js):
+runtime. [`src/index.js:173–232`](src/index.js):
 
 1. Look for `<div id="chat-widget-container" data-user-id="...">`
 2. **Webflow hosted-script path:** if no container exists but our own `<script>` tag (captured via `document.currentScript` at eval time) carries `data-bot_id`, the bootstrap creates the container itself — this is how the SRI-pinned Webflow artifact boots without any loader
@@ -162,7 +163,8 @@ Test against Wix and Webflow if you change this.
 
 ## Known traps
 
-- **Webpack in `mode: 'development'`** — unminified prod bundle. Easy fix; visible to every customer.
+- **The host `<div>` looks EMPTY to the host page's CSS.** Everything lives in the Shadow DOM, and `:empty` only sees the light DOM — so `#chat-widget-container` matches `div:empty`. Shopify's Dawn (`base.css`, `a:empty, ul:empty, div:empty, … { display: none }`) therefore hid the whole widget on every Dawn store: it still booted, fetched its config and built the Shadow DOM, so there was **no error anywhere** and every node simply measured `0x0`. Fixed 2026-08-09 by the inline `display: 'block'` at [`src/index.js:291`](src/index.js). Triage recipe: `getBoundingClientRect()` returning `[0,0,0,0]` while `getComputedStyle` reports normal values means "not in the rendering tree", i.e. look at the host, not at the launcher. The same fix is in the release tree's source but **not published** — see below.
+- **The release artifact still carries the `:empty` bug.** `ultimo-bots-widget-release/src/index.js` has the fix, but the published SRI version does not (immutable per version — needs a version bump + `WIDGET_VERSION`/`WIDGET_INTEGRITY_HASH` in [`webflow.py`](../ultimo-bots-backend/src/controller/webflow.py) in lockstep). Webflow customers on a `:empty`-hiding theme stay broken until that ships.
 - **No CI, no source maps, no SRI, no rollback.** Bad commit ships instantly on push.
 - **`src/widget.css` is dead** — runtime CSS lives in a string template inside `index.js`. Edits there have no effect.
 - **`home.html` / `about.html` / `services.html` / `contact.html`** — leftover demo assets, safe to delete.
