@@ -289,6 +289,18 @@ async function initializeChatWidget() {
   if (container.parentElement !== document.body) document.body.appendChild(container);
 
   Object.assign(container.style, {
+    // Shopify's Dawn ships `a:empty, ul:empty, div:empty, … { display: none }`
+    // in base.css, and every Dawn-derived theme inherits it. Our host has NO
+    // light-DOM children (the whole widget lives in the Shadow DOM, which
+    // :empty cannot see), so it matches `div:empty` and the entire widget is
+    // hidden — silently: it still boots, fetches its config and builds the
+    // Shadow DOM, so there is no error anywhere and every node just measures
+    // 0x0. Diagnosed 2026-08-09 on a merchant's Dawn store.
+    // An INLINE declaration outranks any normal author rule regardless of
+    // specificity, which is all it takes. Deliberately NOT !important: a site
+    // that hides the widget on purpose (`#chat-widget-container { display:
+    // none !important }`) must keep winning over us.
+    display: 'block',
     position: 'fixed',
     top: '0',
     left: '0',
