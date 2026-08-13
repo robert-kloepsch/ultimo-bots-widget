@@ -23,7 +23,7 @@ is the deploy. Plan accordingly.
 - **Vanilla JavaScript** in one ~6.2k-line file ([`src/index.js`](src/index.js))
 - **webpack 5** ([`webpack.config.js`](webpack.config.js)). Entry `src/index.js` → output `dist/bundle.js`
 - **Bundle mode: `production`** ([`webpack.config.js:19`](webpack.config.js)) — the committed bundle IS minified (~206 KB). Rebuild locally with `mode: 'development'` when you need to debug one.
-- **Bundled deps** — `marked@11.1.1` + `dompurify@3.1.6` are real npm dependencies, statically imported (since 2026-07, Webflow Marketplace requires a self-contained artifact; the old runtime jsdelivr imports are gone)
+- **Bundled deps** — `marked@11.1.1` + `dompurify@3.4.13` are real npm dependencies, statically imported (since 2026-07, Webflow Marketplace requires a self-contained artifact; the old runtime jsdelivr imports are gone)
 - **Release build** — `npm run build:release` ([`webpack.release.js`](webpack.release.js)) emits the minified, versioned artifact `release/<version>/ultimo-widget.js` that is published to the `ultimo-bots-cdn` repo (GitHub Pages behind `widget.ultimo-bots.com`) and registered with Webflow via SRI hash. Published versions are IMMUTABLE — bump `package.json` version for a new release and update the backend's `WIDGET_VERSION`/`WIDGET_INTEGRITY_HASH` (`ultimo-bots-backend/src/controller/webflow.py`) in lockstep.
 - **Shadow DOM** + `:host { all: initial }` for full isolation
 - **Class prefix: `saicf-*`** — legacy, keep it
@@ -170,12 +170,12 @@ Test against Wix and Webflow if you change this.
 ## Known traps
 
 - **The host `<div>` looks EMPTY to the host page's CSS.** Everything lives in the Shadow DOM, and `:empty` only sees the light DOM — so `#chat-widget-container` matches `div:empty`. Shopify's Dawn (`base.css`, `a:empty, ul:empty, div:empty, … { display: none }`) therefore hid the whole widget on every Dawn store: it still booted, fetched its config and built the Shadow DOM, so there was **no error anywhere** and every node simply measured `0x0`. Fixed 2026-08-09 by the inline `display: 'block'` at [`src/index.js:291`](src/index.js). Triage recipe: `getBoundingClientRect()` returning `[0,0,0,0]` while `getComputedStyle` reports normal values means "not in the rendering tree", i.e. look at the host, not at the launcher. The same fix is in the release tree's source but **not published** — see below.
-- **The release artifact still carries the `:empty` bug.** `ultimo-bots-widget-release/src/index.js` has the fix, but the published SRI version does not (immutable per version — needs a version bump + `WIDGET_VERSION`/`WIDGET_INTEGRITY_HASH` in [`webflow.py`](../ultimo-bots-backend/src/controller/webflow.py) in lockstep). Webflow customers on a `:empty`-hiding theme stay broken until that ships.
+- **Two branches, two artifacts — check which one you are building.** `main` feeds `dist/bundle.js` (Wix, WordPress, docs). The hosted Webflow artifact is built from the release branch and published to `ultimo-bots-cdn`. In 2026-08 the hardening branch was cut from a stale base and never merged back, so `main` and the shipped Webflow runtime diverged for ten days without any error surfacing. `npm run gate:provenance` now checks the whole chain: clean working tree → local build → the file served from the CDN → the version and SRI registered in `webflow.py`.
 - **No CI, no source maps, no SRI, no rollback.** Bad commit ships instantly on push.
 - **`src/widget.css` is dead** — runtime CSS lives in a string template inside `index.js`. Edits there have no effect.
 - **`home.html` / `about.html` / `services.html` / `contact.html`** — leftover demo assets, safe to delete.
 - **Hardcoded backend URLs** — no way to point a single customer at a staging backend without a full rebuild + deploy.
-- **No tests.** Smoke-test page only.
+- **Three gates, run them before any release.** `npm run gate` chains all of them. `gate:static` enforces the five defect classes on the source, `gate:runtime` drives the built artifact in Chromium against a mocked backend, `gate:provenance` verifies source, build, CDN and backend agree. `gate:live <url>` checks a published Webflow page. Every gate is validated in both directions: they pass on 1.2.0 and fail on the rejected 1.1.0 artifact.
 
 ---
 
