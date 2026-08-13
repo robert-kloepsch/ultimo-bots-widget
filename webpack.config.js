@@ -1,5 +1,6 @@
 // webpack.config.js
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
@@ -30,6 +31,9 @@ module.exports = {
     ],
   },
   plugins: [
+    // Shopify add-to-cart stays enabled in the legacy bundle.js build; the
+    // hosted Webflow artifact (webpack.release.js) compiles it out.
+    new webpack.DefinePlugin({ __ULTIMO_COMMERCE__: JSON.stringify(true) }),
     // 1. Generate dist/index.html from src/index.html (optional)
     new HtmlWebpackPlugin({
       template: './src/index.html',

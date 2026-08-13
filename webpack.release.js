@@ -8,6 +8,7 @@
 // The version in the path IS the immutable release id — never overwrite a
 // published version directory; bump package.json instead.
 const path = require('path');
+const webpack = require('webpack');
 const pkg = require('./package.json');
 
 module.exports = {
@@ -20,6 +21,13 @@ module.exports = {
   },
   mode: 'production',
   devtool: false,
+  plugins: [
+    // The hosted (Webflow) runtime must not carry host-page commerce code:
+    // `false` compiles the add-to-cart / theme-cart-sync chain out entirely
+    // (verify: the artifact contains no "cart/add.js", "CartCount" or
+    // "shopify:cart" strings). The default dev build keeps it enabled.
+    new webpack.DefinePlugin({ __ULTIMO_COMMERCE__: JSON.stringify(false) }),
+  ],
   module: {
     rules: [
       {
