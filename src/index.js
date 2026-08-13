@@ -414,6 +414,17 @@ async function initializeChatWidget(hostContainer) {
     },
   };
 
+  // A mount that cannot load its configuration is not a mount. The registry
+  // entry above is written before the config request, so bailing out with a
+  // bare `return` would leave this bot registered as complete forever: the
+  // bootstrap guard would treat it as already mounted and no later execution
+  // could ever recover it, leaving the customer without a working widget.
+  // Tear the half-built instance down and drop it from the registry instead.
+  const abortMount = (err) => {
+    console.error('Widget config load failed – widget aborted', err);
+    try { mountRegistry().destroy(botId); } catch { /* best effort */ }
+  };
+
   const POPUP_KEY = `saicf-popup-seen-${botId}`;
   let   popUpSeen = sessionStorage.getItem(POPUP_KEY) === '1';
 
@@ -2527,7 +2538,7 @@ async function initializeChatWidget(hostContainer) {
       requirePreChat = false;
     }
   } catch (err) {
-    console.error('Widget config load failed – widget aborted', err);
+    abortMount(err);
     return;
   }
 
