@@ -10,7 +10,8 @@
     "gate:static": "node scripts/class-gate.js",
     "gate:runtime": "node tests/runtime-gate.js",
     "gate": "npm run gate:static && npm run build:release && npm run gate:runtime && npm run gate:provenance",
-    "gate:provenance": "node scripts/provenance-gate.js"
+    "gate:provenance": "node scripts/provenance-gate.js",
+    "gate:live": "node tests/live-site-check.js"
   },
   "keywords": [],
   "author": "",
