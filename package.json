@@ -6,7 +6,10 @@
   "scripts": {
     "build": "webpack",
     "build:release": "webpack --config webpack.release.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "gate:static": "node scripts/class-gate.js",
+    "gate:runtime": "node tests/runtime-gate.js",
+    "gate": "npm run gate:static && npm run build:release && npm run gate:runtime"
   },
   "keywords": [],
   "author": "",
