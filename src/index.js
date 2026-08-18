@@ -2326,6 +2326,11 @@ async function initializeChatWidget() {
   }
 
   let widgetConfig;
+  // Waiting indicator on the AI path while the answer is generated. Per-bot
+  // opt-out of the agent-activity status timeline: widget_configurations
+  // .loading_indicator === 'dots' brings back the legacy three bouncing dots
+  // (setLoading). Anything else (missing field, old backend) -> timeline.
+  let useLegacyLoadingDots = false;
   let promotingText = 'This website is powered by smart AI chatbots from Ultimo Bots.';
   let preChatFields = [];
   let requirePreChat = false;
@@ -2346,6 +2351,7 @@ async function initializeChatWidget() {
     } 
     widgetConfig = await res.json();
     promotingText = widgetConfig.promoting_text ?? promotingText;
+    useLegacyLoadingDots = widgetConfig.loading_indicator === 'dots';
 
     // Link target behavior
     if (widgetConfig.open_links_in_new_tab === true) {
@@ -4872,7 +4878,14 @@ function toggleMenu(open) {
     setBusy(true);
     // Activity timeline replaces the loading dots on the AI path: avatar +
     // "Analyzing your question…" from the very first frame after send.
-    statusTimelineShow();
+    // Bots configured with loading_indicator='dots' keep the legacy three
+    // bouncing dots instead; the backend's `status` SSE events are then
+    // dropped by statusUpsertStep (no timeline mounted).
+    if (useLegacyLoadingDots) {
+      setLoading(true);
+    } else {
+      statusTimelineShow();
+    }
 
     // Trigger positioning after DOM is updated
     doPositioning();
@@ -4998,6 +5011,10 @@ function toggleMenu(open) {
             smoothScrollTarget = null;
           }
           firstChunk = false;
+          // Legacy dots: drop them right here (as before the timeline);
+          // statusTimelineCollapse below then runs its callback synchronously
+          // because no timeline is mounted, and the answer starts typing.
+          if (useLegacyLoadingDots) setLoading(false);
           // The answer is starting: fade the timeline out (text keeps
           // buffering meanwhile), then swap in the answer typing from its
           // first characters. One element owns the stage at a time — the
