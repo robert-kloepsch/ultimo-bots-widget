@@ -77,10 +77,69 @@ const record = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `\n        ${detail}` : ''}`);
 };
 
-async function withPage(fn, { stallConfig = false, failConfig = false } = {}) {
+// Counts what the runtime leaves behind on objects that outlive it. Installed
+// before any page script runs, so it sees every call the widget makes.
+const CENSUS_SCRIPT = `
+  (() => {
+    const c = window.__CENSUS__ = {
+      listeners: new Map(),      // key -> outstanding (added - removed) listeners
+      timersOpen: new Set(),     // native timer ids created and neither cleared nor fired
+      timerFires: 0,
+      firesAfterMark: 0,
+      marked: false,
+      visibility: 'visible',
+    };
+    const key = (t, type) => (t === window ? 'window' : t === document ? 'document' : 'other') + ':' + type;
+    const origAdd = EventTarget.prototype.addEventListener;
+    const origRemove = EventTarget.prototype.removeEventListener;
+    for (const target of [window, document]) {
+      target.addEventListener = function (type, fn, opts) {
+        const once = !!(opts && typeof opts === 'object' && opts.once);
+        // Only listeners registered from the widget file count; Playwright
+        // installs its own window listeners for actionability checks.
+        const ours = /ultimo-widget\.js/.test(new Error().stack || '');
+        if (ours && !once && type !== 'DOMContentLoaded') {
+          const k = key(this, type); c.listeners.set(k, (c.listeners.get(k) || 0) + 1);
+        }
+        return origAdd.call(this, type, fn, opts);
+      };
+      target.removeEventListener = function (type, fn, opts) {
+        const k = key(this, type);
+        if (c.listeners.has(k)) c.listeners.set(k, c.listeners.get(k) - 1);
+        return origRemove.call(this, type, fn, opts);
+      };
+    }
+    if (window.visualViewport) {
+      const vv = window.visualViewport;
+      const oa = vv.addEventListener.bind(vv), orm = vv.removeEventListener.bind(vv);
+      vv.addEventListener = (type, fn, opts) => { const k = 'visualViewport:' + type; c.listeners.set(k, (c.listeners.get(k) || 0) + 1); return oa(type, fn, opts); };
+      vv.removeEventListener = (type, fn, opts) => { const k = 'visualViewport:' + type; if (c.listeners.has(k)) c.listeners.set(k, c.listeners.get(k) - 1); return orm(type, fn, opts); };
+    }
+    const oST = window.setTimeout, oSI = window.setInterval, oCT = window.clearTimeout, oCI = window.clearInterval;
+    window.setTimeout = function (fn, ms, ...args) {
+      let id;
+      id = oST(() => { c.timersOpen.delete(id); c.timerFires++; if (c.marked) c.firesAfterMark++; return typeof fn === 'function' ? fn(...args) : undefined; }, ms);
+      c.timersOpen.add(id); return id;
+    };
+    window.setInterval = function (fn, ms, ...args) {
+      let id;
+      id = oSI(() => { c.timerFires++; if (c.marked) c.firesAfterMark++; return typeof fn === 'function' ? fn(...args) : undefined; }, ms);
+      c.timersOpen.add(id); return id;
+    };
+    window.clearTimeout = function (id) { c.timersOpen.delete(id); return oCT(id); };
+    window.clearInterval = function (id) { c.timersOpen.delete(id); return oCI(id); };
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => c.visibility });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => c.visibility === 'hidden' });
+  })();
+`;
+
+async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false } = {}) {
   const browser = await chromium.launch();
-  const context = await browser.newContext();
+  const context = await browser.newContext(mobile
+    ? { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
+    : {});
   const page = await context.newPage();
+  if (census) await page.addInitScript(CENSUS_SCRIPT);
 
   const apiRequests = [];
   const sockets = [];   // every WS the page opens, counted where it is routed:
@@ -148,7 +207,7 @@ async function withPage(fn, { stallConfig = false, failConfig = false } = {}) {
       return res.end(fs.readFileSync(ARTIFACT));
     }
     res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(`<!doctype html><html><head><title>widget host</title></head><body>
+    res.end(`<!doctype html><html><head><title>widget host</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>
       <h1>Host page</h1>
       <script src="/ultimo-widget.js" data-bot_id="${BOT}"></script>
     </body></html>`);
@@ -382,6 +441,103 @@ async function testAgentPopupKeyboard() {
   });
 }
 
+// ── 7. Teardown census: nothing of ours survives destroy() ────────────────
+// The reviewer's finding 1 on 1.2.0 was not a reopened socket (that was
+// fixed) but what a later event could still wake: listeners left on
+// document/window and timers that were never cleared. This test counts
+// them, then pokes the survivors the way a tab switch would.
+async function testTeardownCensus() {
+  await withPage(async ({ page, base, apiRequests, sockets }) => {
+    await page.goto(base);
+    await mounted(page);
+    await openChat(page);
+    await page.waitForTimeout(1500);
+    await sendUserMessage(page, 'hello');
+    await page.waitForTimeout(3000);
+    const wsArmed = sockets.length > 0;
+
+    // A tab switch while alive, so the visibility paths are exercised first.
+    await page.evaluate(() => { window.__CENSUS__.visibility = 'hidden'; document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { window.__CENSUS__.visibility = 'visible'; document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForTimeout(1500);
+
+    await page.evaluate(() => window.__ULTIMO_BOTS__.destroy());
+    await page.waitForTimeout(1500);
+    const after = await page.evaluate(() => {
+      const c = window.__CENSUS__;
+      c.marked = true;
+      return {
+        listeners: [...c.listeners.entries()].filter(([, n]) => n > 0).map(([k, n]) => `${k}=${n}`),
+        timersOpen: c.timersOpen.size,
+      };
+    });
+    const reqAtDestroy = apiRequests.length;
+    const socksAtDestroy = sockets.length;
+
+    // Poke: hide and show the tab twice after teardown, then wait out any
+    // heartbeat/poll cadence (15 s) plus a reconnect backoff.
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => { window.__CENSUS__.visibility = 'hidden'; document.dispatchEvent(new Event('visibilitychange')); });
+      await page.waitForTimeout(300);
+      await page.evaluate(() => { window.__CENSUS__.visibility = 'visible'; document.dispatchEvent(new Event('visibilitychange')); });
+      await page.waitForTimeout(300);
+    }
+    await page.waitForTimeout(20000);
+    const fires = await page.evaluate(() => window.__CENSUS__.firesAfterMark);
+    const newReq = apiRequests.length - reqAtDestroy;
+    const newSocks = sockets.length - socksAtDestroy;
+
+    record('teardown census: no listeners, no timers, nothing wakes on tab switch',
+      wsArmed && after.listeners.length === 0 && after.timersOpen === 0 && fires === 0 && newReq === 0 && newSocks === 0,
+      `ws armed=${wsArmed} | surviving listeners=${JSON.stringify(after.listeners)} | open timers=${after.timersOpen} | timer fires after destroy=${fires} | requests=${newReq} | sockets=${newSocks}`);
+  }, { census: true });
+}
+
+// ── 8. Mobile: the host page is never restyled ─────────────────────────────
+// Finding 5 on 1.2.0: opening the widget at a phone width put position:fixed,
+// overflow:hidden, inset:0, width:100% onto the customer's body and html.
+async function testMobileHostIsolation() {
+  await withPage(async ({ page, base }) => {
+    await page.goto(base);
+    await mounted(page);
+    // Give the host page real height so scroll position is observable.
+    await page.evaluate(() => {
+      const filler = document.createElement('div');
+      filler.style.height = '3000px';
+      document.body.appendChild(filler);
+      window.scrollTo(0, 400);
+    });
+    await page.waitForTimeout(300);
+    const snap = () => page.evaluate(() => {
+      const pick = (el) => {
+        const cs = getComputedStyle(el);
+        return [cs.position, cs.overflow, cs.overflowY, cs.width, cs.top, cs.left, cs.touchAction, el.className, el.getAttribute('style')].join('|');
+      };
+      return {
+        body: pick(document.body),
+        html: pick(document.documentElement),
+        headOurs: [...document.head.querySelectorAll('[id^="saicf"], style')].length,
+        scrollY: window.scrollY,
+      };
+    });
+    const before = await snap();
+    await openChat(page);
+    await page.waitForTimeout(1200);
+    const open = await snap();
+    const chatVisible = await chatIsOpen(page);
+    await page.evaluate(() => {
+      document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot.querySelector('.saicf-close-btn').click();
+    });
+    await page.waitForTimeout(800);
+    const closed = await snap();
+    const same = (a, b) => a.body === b.body && a.html === b.html && a.headOurs === b.headOurs && a.scrollY === b.scrollY;
+    record('mobile: body/html untouched while the chat is open and after close',
+      chatVisible && same(before, open) && same(before, closed),
+      `chat opened=${chatVisible} | body(before)=${before.body.slice(0, 70)} | body(open)=${open.body.slice(0, 70)} | head styles before/open=${before.headOurs}/${open.headOurs} | scrollY before/open/closed=${before.scrollY}/${open.scrollY}/${closed.scrollY}`);
+  }, { mobile: true });
+}
+
 // ── Run ───────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`runtime gate — artifact: ${path.relative(process.cwd(), ARTIFACT)}\n`);
@@ -392,6 +548,8 @@ async function testAgentPopupKeyboard() {
     testBodyStall,
     testProductUrlNeutralised,
     testAgentPopupKeyboard,
+    testTeardownCensus,
+    testMobileHostIsolation,
   ];
   for (const t of suite) {
     try {

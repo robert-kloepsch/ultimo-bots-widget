@@ -1,6 +1,6 @@
 {
   "name": "swiss_bot_widget",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "",
   "main": "widget.js",
   "scripts": {
@@ -9,9 +9,11 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "gate:static": "node scripts/class-gate.js",
     "gate:runtime": "node tests/runtime-gate.js",
-    "gate": "npm run gate:static && npm run build:release && npm run gate:runtime && npm run gate:provenance",
+    "gate": "npm run gate:static && npm run build:release && npm run gate:runtime && npm run gate:claims && npm run gate:provenance",
+    "gate:claims": "node scripts/claims-gate.js",
     "gate:provenance": "node scripts/provenance-gate.js",
-    "gate:live": "node tests/live-site-check.js"
+    "gate:live": "node tests/live-site-check.js",
+    "gate:cors": "node tests/live-cors-matrix.js"
   },
   "keywords": [],
   "author": "",

@@ -31,10 +31,11 @@ const CONSTANT_RHS = /^(PC_ICON_[A-Z_]+|ICON_[A-Z_]+)$/;
 // Fire-and-forget calls that deliberately outlive the caller, plus the paths
 // that carry their own AbortController. Each is listed with the marker that
 // identifies it, so a new bare fetch never silently inherits the exemption.
+// 1.3.0: the three "nothing awaits it" exemptions (disconnect beacon, ack,
+// live-mode forward) are gone — the reviewer counted exactly those three as
+// requests without a deadline. Only calls that carry their own AbortController
+// remain exempt.
 const ALLOWED_BARE_FETCH = [
-  { marker: 'api/live/disconnect', why: 'beforeunload beacon, keepalive, nothing awaits it' },
-  { marker: 'api/live/ack/', why: 'fire-and-forget acknowledgement' },
-  { marker: 'fire-and-forget', why: 'live-mode message forward' },
   { marker: 'signal: aborter.signal', why: 'the AI stream carries its own watchdogs' },
   { marker: "'/cart.js'", why: 'commerce path, compiled out of the hosted build' },
   { marker: "'/cart/add.js'", why: 'commerce path, compiled out of the hosted build' },
@@ -209,6 +210,76 @@ if (!/destroy\(\) \{\s*\n\s*if \(destroyed\) return;/.test(src)) {
 if (!/if \(pending && pending\.status === 'mounting'\)/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'mount registry', why: 'a failed initialization is not rolled back' });
 }
+// Timer census: inside the instance every setTimeout/setInterval must be the
+// owned variant (tracked, guarded, cleared on destroy). The only native timers
+// allowed are request-abort timers, identified by `.abort()` on the same line.
+{
+  const instanceStart = src.indexOf('const ownGlobalListener');
+  if (instanceStart < 0) {
+    violations.push({ cls: 'C', line: 0, text: 'ownGlobalListener', why: 'owned timer/listener helpers missing — gate is stale' });
+  } else {
+    let off = 0;
+    lines.forEach((raw, idx) => {
+      const lineStart = off;
+      off += raw.length + 1;
+      if (lineStart < instanceStart) return;
+      const line = raw.trim();
+      if (line.startsWith('//') || line.startsWith('*')) return;
+      if (/(?<![\w.])set(Timeout|Interval)\(/.test(line) && !/\.abort\(\)/.test(line)) {
+        fail('C', idx + 1, raw, 'native timer inside the instance — use ownSetTimeout/ownSetInterval so destroy() clears it');
+      }
+      if (/(?<![\w.])(window|document|visualVP|visualViewport|navigator|screen)\.addEventListener\(/.test(line)) {
+        fail('C', idx + 1, raw, 'listener on a host-lifetime object — register it through ownGlobalListener so destroy() removes it');
+      }
+      if (/new (ResizeObserver|MutationObserver|IntersectionObserver)\(/.test(line)) {
+        const name = (raw.match(/(?:const|let)\s+(\w+)\s*=\s*new/) || [])[1];
+        if (name && !src.includes(`registerCleanup(() => ${name}.disconnect())`)) {
+          fail('C', idx + 1, raw, `observer "${name}" is never disconnected in a registerCleanup block`);
+        }
+      }
+    });
+  }
+}
+
+// ── Class F: the host page is never modified ──────────────────────────────
+// Webflow: an injected script "must not modify, restyle, reorder, or remove
+// existing page content or layout" and lives inside its own container. The
+// host's body/html must never be classed, styled or observed for forms, and
+// nothing of ours goes into document.head except removable <link> hints.
+lines.forEach((raw, idx) => {
+  const line = raw.trim();
+  if (line.startsWith('//') || line.startsWith('*') || line.startsWith('/*')) return;
+  if (/document\.(body|documentElement)\.(classList|style|setAttribute|removeAttribute)/.test(line)) {
+    fail('F', idx + 1, raw, 'host body/html must not be classed or styled');
+  }
+  if (/document\.head\.appendChild\((?!l\)|link\))/.test(line)) {
+    fail('F', idx + 1, raw, 'only removable <link> hints may be appended to document.head');
+  }
+  if (/document\.(querySelector|querySelectorAll|getElementsBy\w+)\((['"`])[^'"`]*(input|form|textarea|password|\[type=)/.test(line)) {
+    fail('F', idx + 1, raw, 'host-page form/input lookup — the runtime must not read host forms');
+  }
+  if (/document\.cookie/.test(line)) {
+    fail('F', idx + 1, raw, 'host cookies must not be read or written');
+  }
+});
+
+// ── Class G: nothing non-production, nothing that rewrites the platform ───
+lines.forEach((raw, idx) => {
+  const line = raw.trim();
+  if (line.startsWith('//') || line.startsWith('*')) return;
+  if (/(localhost|127\.0\.0\.1|ngrok|\.local|staging\.|:3000|:5001|:8000)/.test(line)) {
+    fail('G', idx + 1, raw, 'non-production host or port in the runtime');
+  }
+  if (/(?<![\w.])(window|globalThis)\.(fetch|XMLHttpRequest|WebSocket|alert|open|setTimeout|setInterval|console|addEventListener)\s*=[^=]/.test(line)) {
+    fail('G', idx + 1, raw, 'native browser function reassigned');
+  }
+  if (/\.prototype\.\w+\s*=[^=]/.test(line)) {
+    fail('G', idx + 1, raw, 'native prototype modified');
+  }
+  if (/(?<![\w.])(window|globalThis)\.(marked|DOMPurify|Webflow|webflow)\s*=[^=]/.test(line)) {
+    fail('G', idx + 1, raw, 'page global written');
+  }
+});
 
 // ── Class D: every click target must be reachable by keyboard ─────────────
 const declared = new Map();
@@ -236,6 +307,8 @@ const NAMES = {
   C: 'nothing runs after teardown',
   D: 'every click target is keyboard operable',
   E: 'no request without a deadline',
+  F: 'the host page is never modified',
+  G: 'nothing non-production, nothing that rewrites the platform',
 };
 if (violations.length === 0) {
   console.log('class gate: PASS');

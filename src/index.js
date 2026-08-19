@@ -100,12 +100,14 @@ function ensureFontLoaded(fontFamily) {
   const key = normalizeFontKey(fontFamily);
   const href = FONT_SOURCES[key];
   if (!href) return;
-  if (document.querySelector(`link[data-ultimo-font="${key}"]`)) return;
+  if (document.querySelector(`link[data-ultimo-font="${key}"]`)) return null;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = href;
   link.setAttribute('data-ultimo-font', key);
   document.head.appendChild(link);
+  // Returned so the instance that added it can remove it on teardown.
+  return link;
 }
 
 // ── Colour helpers ────────────────────────────────────────────────────
@@ -281,7 +283,7 @@ function mountRegistry() {
       if (!started && document.body) {
         observer.observe(document.body, { childList: true, subtree: true });
       }
-    });
+    }, { once: true });
   }
 
   function tryStart() {
@@ -296,18 +298,22 @@ function mountRegistry() {
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', tryStart);
+    document.addEventListener('DOMContentLoaded', tryStart, { once: true });
   } else {
     tryStart();
   }
 })();
 
 async function initializeChatWidget(hostContainer) {
+  // Resource hints this instance adds to the host document; destroy()
+  // removes them again (see registerCleanup below once it exists).
+  const _hostHeadNodes = [];
   ['https://portal.ultimo-bots.com']
     .forEach(h => {
       if (!document.querySelector(`link[rel="preconnect"][href="${h}"]`)) {
         const l = document.createElement('link');
         l.rel = 'preconnect'; l.href = h; l.crossOrigin = ''; document.head.appendChild(l);
+        _hostHeadNodes.push(l);
       }
     });
   let _linkTarget = '_self';
@@ -397,10 +403,45 @@ async function initializeChatWidget(hostContainer) {
   // window.__ULTIMO_BOTS__.destroy(botId) runs them all and removes the root.
   const _cleanups = [];
   const registerCleanup = (fn) => { _cleanups.push(fn); };
+  registerCleanup(() => { _hostHeadNodes.forEach((n) => { try { n.remove(); } catch { /* gone */ } }); _hostHeadNodes.length = 0; });
   // Single source of truth for "this instance is gone". Every timer, socket
   // handler, poller and animation tick checks it before doing anything, so
   // nothing this widget owns can act — or reconnect — after teardown.
   let destroyed = false;
+  // Every timer this instance creates goes through these wrappers: the id is
+  // tracked, the callback is skipped once destroyed, and destroy() clears
+  // whatever is still pending. Individual clearTimeout/clearInterval calls on
+  // the returned ids keep working unchanged. The only timers NOT routed
+  // through here are request-abort timers (fetchWithTimeout, stream
+  // watchdogs): those must fire even during teardown so in-flight requests
+  // end instead of lingering.
+  const _ownTimers = new Set();
+  const ownSetTimeout = (fn, ms) => {
+    const id = setTimeout(() => {
+      _ownTimers.delete(id);
+      if (destroyed) return;
+      fn();
+    }, ms);
+    _ownTimers.add(id);
+    return id;
+  };
+  const ownSetInterval = (fn, ms) => {
+    const id = setInterval(() => {
+      if (destroyed) { clearInterval(id); _ownTimers.delete(id); return; }
+      fn();
+    }, ms);
+    _ownTimers.add(id);
+    return id;
+  };
+  // Listeners on objects that outlive the widget (document, window) are
+  // registered through this helper so destroy() can remove them; a listener
+  // that survived teardown was the reviewer's reproduction of "runtime keeps
+  // operating after it is destroyed".
+  const ownGlobalListener = (target, type, handler, options) => {
+    const wrapped = (ev) => { if (destroyed) return; handler(ev); };
+    target.addEventListener(type, wrapped, options);
+    registerCleanup(() => target.removeEventListener(type, wrapped, options));
+  };
   mountRegistry().instances[botId] = {
     status: 'mounted',
     destroy() {
@@ -408,9 +449,9 @@ async function initializeChatWidget(hostContainer) {
       destroyed = true;
       _cleanups.forEach((fn) => { try { fn(); } catch { /* best effort */ } });
       _cleanups.length = 0;
+      _ownTimers.forEach((id) => { clearTimeout(id); clearInterval(id); });
+      _ownTimers.clear();
       try { container.remove(); } catch { /* already gone */ }
-      document.body.classList.remove('no-scroll');
-      document.documentElement.classList.remove('no-scroll');
     },
   };
 
@@ -442,22 +483,6 @@ async function initializeChatWidget(hostContainer) {
 
   shadowRoot.host.setAttribute('lang', 'en');
 
-  if (!document.getElementById('saicf-global-scroll-style')) {
-    const globalScrollStyle = document.createElement('style');
-    globalScrollStyle.id = 'saicf-global-scroll-style';
-    globalScrollStyle.textContent = `
-      body.no-scroll,
-      html.no-scroll {
-        overflow: hidden !important;
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100% !important;
-        touch-action: none !important;
-        overscroll-behavior: none !important;
-      }
-    `;
-    document.head.appendChild(globalScrollStyle);
-  }
 
   const styleTag = document.createElement('style');
   styleTag.textContent = `
@@ -1781,6 +1806,14 @@ async function initializeChatWidget(hostContainer) {
         min-height: 0 !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
+        /* Reaching the end of the chat must not scroll the host page behind
+           the fullscreen window. Containment lives on OUR scroller; the
+           host's body/html are never restyled (Webflow: injected scripts may
+           not modify the page layout). */
+        overscroll-behavior: contain !important;
+      }
+      .saicf-chat-window {
+        overscroll-behavior: contain !important;
       }
 
       /* Keep your existing mobile sizing for other bits */
@@ -2468,6 +2501,11 @@ async function initializeChatWidget(hostContainer) {
   };
 
   let widgetConfig;
+  // Waiting indicator on the AI path while the answer is generated. Per-bot
+  // opt-out of the agent-activity status timeline: widget_configurations
+  // .loading_indicator === 'dots' brings back the legacy three bouncing dots
+  // (setLoading). Anything else (missing field, old backend) -> timeline.
+  let useLegacyLoadingDots = false;
   let promotingText = 'This website is powered by smart AI chatbots from Ultimo Bots.';
   let preChatFields = [];
   let requirePreChat = false;
@@ -2491,6 +2529,7 @@ async function initializeChatWidget(hostContainer) {
     } 
     widgetConfig = await res.json();
     promotingText = widgetConfig.promoting_text ?? promotingText;
+    useLegacyLoadingDots = widgetConfig.loading_indicator === 'dots';
 
     // Link target behavior
     if (widgetConfig.open_links_in_new_tab === true) {
@@ -2658,7 +2697,7 @@ async function initializeChatWidget(hostContainer) {
     return /^[\w\s,'"-]{1,120}$/.test(raw) ? raw : '"DM Sans", sans-serif';
   })();
 
-  ensureFontLoaded(fontFamily);
+  { const fontLink = ensureFontLoaded(fontFamily); if (fontLink) _hostHeadNodes.push(fontLink); }
   shadowRoot.host.style.setProperty('--saicf-font-family', fontFamily);
 
   let isPulsing = false;
@@ -2960,7 +2999,6 @@ async function initializeChatWidget(hostContainer) {
       if (window.matchMedia('(max-width: 768px)').matches) {
         // Mobile: fullscreen window, launcher hidden underneath.
         chatWidgetIcon.classList.add('hidden');
-        document.body.classList.add('no-scroll');
       } else {
         // Desktop: window opens above the launcher, which flips to a
         // close chevron and acts as the close button.
@@ -3273,7 +3311,7 @@ async function initializeChatWidget(hostContainer) {
     const minDelay = 200;
     const remainingDelay = Math.max(0, minDelay - elapsed);
 
-    setTimeout(() => {
+    ownSetTimeout(() => {
       configLoading.classList.add('hidden');
 
       if (requirePreChat && !preChatCompleted) {
@@ -3356,13 +3394,15 @@ function toggleMenu(open) {
         const tok = getStoredSessionToken();
         const payload = { session_id: sessionId, bot_id: botId };
         if (tok) payload.session_token = tok;
-        fetch('https://portal.ultimo-bots.com/api/live/disconnect', {
+        // Bounded like every other request: keepalive lets it outlive the
+        // page, the deadline stops it from lingering if the server stalls.
+        fetchWithTimeout('https://portal.ultimo-bots.com/api/live/disconnect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
           credentials: 'omit',
           keepalive: true,
-        }).catch(() => { /* non-fatal */ });
+        }, 5000).catch(() => { /* non-fatal */ });
       } catch { /* non-fatal */ }
     }
 
@@ -3598,7 +3638,7 @@ function toggleMenu(open) {
     chatBody.addEventListener('touchstart', () => { userTouching = true; }, { passive: true });
     chatBody.addEventListener('touchend', () => {
       // Defer so the final scroll events from the touch are processed
-      setTimeout(() => { userTouching = false; }, 100);
+      ownSetTimeout(() => { userTouching = false; }, 100);
     }, { passive: true });
     chatBody.addEventListener('scroll', function () {
       if (userTouching && isStreamingState && !userScrolledAway) {
@@ -3634,6 +3674,7 @@ function toggleMenu(open) {
     }
   });
   bodyResizeObserver.observe(chatBody);
+  registerCleanup(() => bodyResizeObserver.disconnect());
 
   // ── iOS on-screen keyboard fit ───────────────────────────────────
   // iPhone Safari does NOT shrink the layout viewport when the keyboard
@@ -3673,16 +3714,46 @@ function toggleMenu(open) {
         chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 40;
       if (active === chatInput && atBottom) requestAnimationFrame(() => scrollToBottom());
     };
-    visualVP.addEventListener('resize', onViewportChange);
-    visualVP.addEventListener('scroll', onViewportChange);
+    ownGlobalListener(visualVP, 'resize', onViewportChange);
+    ownGlobalListener(visualVP, 'scroll', onViewportChange);
 
     // First-tap safety net: iOS occasionally settles the keyboard
     // without a (timely) resize event. Re-fit shortly after focus so
     // the very first tap into the input never leaves it hidden.
     chatInput.addEventListener('focus', () => {
-      [300, 800].forEach(ms => setTimeout(onViewportChange, ms));
+      [300, 800].forEach(ms => ownSetTimeout(onViewportChange, ms));
     });
   }
+
+  // Mobile scroll containment, entirely inside the widget: the fullscreen
+  // window is position:fixed in the shadow tree and its scrollers carry
+  // overscroll-behavior: contain. What is left is a touch-drag that starts
+  // on non-scrolling chrome (header, footer, input row): the browser would
+  // hand that pan to the nearest scrollable ancestor, i.e. the host page
+  // behind the window. Swallow it here. Touches on anything that can scroll
+  // (chat body, product carousel, textarea) are left alone. The host page's
+  // body/html are never classed or restyled.
+  function findScrollableWithin(start, boundary) {
+    let el = start;
+    while (el && el !== boundary) {
+      if (el.nodeType === 1) {
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.tagName === 'SELECT') return el;
+        const st = getComputedStyle(el);
+        const oy = st.overflowY;
+        const ox = st.overflowX;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+        if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth) return el;
+      }
+      el = el.parentNode;
+    }
+    return null;
+  }
+  chatWindow.addEventListener('touchmove', (e) => {
+    if (!chatWindow.classList.contains('show')) return;
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    if (findScrollableWithin(e.target, chatWindow)) return;
+    e.preventDefault();
+  }, { passive: false });
 
   // Handle scroll positioning for incoming live content (agent messages,
   // system notices). Simple scroll-to-bottom like standard chat apps.
@@ -4067,7 +4138,7 @@ function toggleMenu(open) {
     // after a shared outage, with a cap raised from 10 s to 30 s.
     const base = wsReconnectDelay;
     const jittered = Math.floor(base * (0.5 + Math.random()));
-    wsReconnectTimer = setTimeout(() => {
+    wsReconnectTimer = ownSetTimeout(() => {
       wsReconnectTimer = null;
       wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
       connectLiveWs();
@@ -4090,11 +4161,11 @@ function toggleMenu(open) {
       const tok = getStoredSessionToken();
       const body = { message_ids: messageIds };
       if (tok) body.session_token = tok;
-      fetch(`https://portal.ultimo-bots.com/api/live/ack/${sessionId}`, {
+      fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/ack/${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).then((res) => {
+      }, 8000).then((res) => {
         if (res && res.status === 401) resetLiveSessionForAuthFailure();
       }).catch(() => { /* best-effort */ });
     }
@@ -4123,9 +4194,9 @@ function toggleMenu(open) {
     const retry = () => {
       tries += 1;
       if (wsSend(payload)) return;
-      if (tries < 10) setTimeout(retry, 300);
+      if (tries < 10) ownSetTimeout(retry, 300);
     };
-    setTimeout(retry, 300);
+    ownSetTimeout(retry, 300);
   }
 
   // ── Agent-connected bar (below header) ──
@@ -4200,7 +4271,7 @@ function toggleMenu(open) {
     // the indicator does not flicker during natural typing pauses, but
     // short enough that a stuck indicator clears itself within ~10s.
     if (agentTypingTimer) { clearTimeout(agentTypingTimer); }
-    agentTypingTimer = setTimeout(() => { hideAgentTyping(); }, 10000);
+    agentTypingTimer = ownSetTimeout(() => { hideAgentTyping(); }, 10000);
     if (agentTypingRow && agentTypingRow.isConnected) return;
     agentTypingRow = document.createElement('div');
     agentTypingRow.className = 'saicf-agent-typing-row';
@@ -4278,6 +4349,7 @@ function toggleMenu(open) {
       characterData: true,
       subtree: true,
     });
+    registerCleanup(() => ctaObserver.disconnect());
   }
   if (requestAgentBtn) {
     requestAgentBtn.addEventListener('click', async (e) => {
@@ -4604,6 +4676,7 @@ function toggleMenu(open) {
 
   // ── Live chat: Heartbeat ──
   function startHeartbeat() {
+    if (destroyed) return;
     if (heartbeatInterval) return;
     // Open the live WS proactively. The backend uses it to push `live_agent_joined`
     // the instant the portal agent clicks Join. Without this, a visitor who never
@@ -4611,7 +4684,7 @@ function toggleMenu(open) {
     // poll — causing the portal's "Connecting…" state to stall for ~15s on first join.
     try { connectLiveWs(); } catch (_) { /* best-effort */ }
     sendHeartbeat(); // fire immediately
-    heartbeatInterval = setInterval(sendHeartbeat, 15000);
+    heartbeatInterval = ownSetInterval(sendHeartbeat, 15000);
   }
 
   function stopHeartbeat() {
@@ -4626,13 +4699,14 @@ function toggleMenu(open) {
   // agent_requested / agent_joined sessions for up to 30 min, so a 60 s
   // cadence is plenty to prevent GC without draining the battery.
   function startSlowHiddenHeartbeat() {
+    if (destroyed) return;
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
     }
     // Do NOT fire immediately — the tab just went hidden and the last
     // foreground beat is still fresh. Let the interval take the next one.
-    heartbeatInterval = setInterval(sendHeartbeat, 60000);
+    heartbeatInterval = ownSetInterval(sendHeartbeat, 60000);
   }
 
   // In-flight guard: interval ticks never stack requests (a slow network
@@ -4685,6 +4759,7 @@ function toggleMenu(open) {
 
   // ── Live chat: Agent message polling ──
   async function startAgentPolling(connectWs = true) {
+    if (destroyed) return;
     if (agentPollInterval) return;
 
     // Connect WS immediately so real-time events arrive ASAP
@@ -4723,7 +4798,7 @@ function toggleMenu(open) {
     if (agentPollInterval) return;
 
     pollAgentMessages(); // fire immediately
-    agentPollInterval = setInterval(pollAgentMessages, currentPollInterval());
+    agentPollInterval = ownSetInterval(pollAgentMessages, currentPollInterval());
   }
 
   function stopAgentPolling() {
@@ -4806,7 +4881,7 @@ function toggleMenu(open) {
   //   - Real close: heartbeat stops → `cleanup_stale` ends the session after
   //     the configured timeout → portal sees it vanish naturally.
   // Explicit disconnects (Clear chat) still call /api/live/disconnect.
-  window.addEventListener('beforeunload', () => {
+  ownGlobalListener(window, 'beforeunload', () => {
     stopHeartbeat();
     if (liveHeartbeatStarted) {
       // Close WS cleanly so backend onclose fires; session row is untouched.
@@ -4817,7 +4892,7 @@ function toggleMenu(open) {
   });
 
   // ── Pause/resume on tab visibility change ──
-  document.addEventListener('visibilitychange', () => {
+  ownGlobalListener(document, 'visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       // W1: also pause the safety-net agent poll while hidden — otherwise a
       // backgrounded tab keeps hammering /api/live/messages every 2–5 s.
@@ -4885,7 +4960,6 @@ function toggleMenu(open) {
     if (window.matchMedia('(max-width: 768px)').matches) {
       // Mobile: fullscreen window, launcher hidden underneath.
       chatWidgetIcon.classList.add('hidden');
-      document.body.classList.add('no-scroll');
     } else {
       // Desktop: window opens above the launcher, which flips to a
       // close chevron and acts as the close button.
@@ -4962,7 +5036,7 @@ function toggleMenu(open) {
 
     const msgs = popUpContainer.querySelectorAll('.saicf-pop-up-message');
     msgs.forEach((msg, i) => {
-      setTimeout(() => {
+      ownSetTimeout(() => {
         msg.classList.add('show');
         if (i === 0) {
           popUpCloseBtn.classList.add('show');
@@ -5052,7 +5126,7 @@ function toggleMenu(open) {
   }
 
   if (popUpMessages) {
-    const popUpTimer = setTimeout(showPopUpSequentially, popUpDelaySeconds * 1000);
+    const popUpTimer = ownSetTimeout(showPopUpSequentially, popUpDelaySeconds * 1000);
     registerCleanup(() => clearTimeout(popUpTimer));
   }
 
@@ -5066,14 +5140,11 @@ function toggleMenu(open) {
     chatWidgetIcon.classList.remove('saicf-icon-open');
     setLauncherExpanded(false);
     chatOverlay.classList.add('hidden');
-    if (window.matchMedia('(max-width: 768px)').matches) {
-      document.body.classList.remove('no-scroll');
-    }
     // Drop the keyboard-fit vars: if the chat is closed while the
     // keyboard is open, the closing resize event is ignored (no .show)
     // and a stale shrunken height would stick until the next reopen.
     clearViewportFit();
-    setTimeout(() => chatWindow.classList.add('hidden'), 300);
+    ownSetTimeout(() => chatWindow.classList.add('hidden'), 300);
   }
 
   function generateSessionId() {
@@ -5129,11 +5200,13 @@ function toggleMenu(open) {
     // would never see it after joining.
     if (liveSessionStatus === 'agent_requested' || liveSessionStatus === 'agent_joined') {
       // POST body, never the URL: visitor text stays out of request URLs.
-      fetch('https://portal.ultimo-bots.com/api/chatbot_response', {
+      // bot_id also rides in the URL so the backend can scope the CORS
+      // preflight to this bot; the body stays the source of truth.
+      fetchWithTimeout(`https://portal.ultimo-bots.com/api/chatbot_response?bot_id=${encodeURIComponent(botId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_input: message, session_id: sessionId, bot_id: botId, language: 'english' }),
-      }).catch(() => {}); // fire-and-forget
+      }, 15000).catch(() => {}); // nothing awaits it, but it is bounded
       saveChatHistory();
       scrollToBottom();
       isStreamingState = false;
@@ -5149,7 +5222,14 @@ function toggleMenu(open) {
     setBusy(true);
     // Activity timeline replaces the loading dots on the AI path: avatar +
     // "Analyzing your question…" from the very first frame after send.
-    statusTimelineShow();
+    // Bots configured with loading_indicator='dots' keep the legacy three
+    // bouncing dots instead; the backend's `status` SSE events are then
+    // dropped by statusUpsertStep (no timeline mounted).
+    if (useLegacyLoadingDots) {
+      setLoading(true);
+    } else {
+      statusTimelineShow();
+    }
 
     // Trigger positioning after DOM is updated
     doPositioning();
@@ -5223,7 +5303,7 @@ function toggleMenu(open) {
 
     const armFinalizeSafety = () => {
       if (finalized || safetyTimer) return;
-      safetyTimer = setTimeout(() => { safetyTimer = null; finalizeReply(); }, FINALIZE_SAFETY_MS);
+      safetyTimer = ownSetTimeout(() => { safetyTimer = null; finalizeReply(); }, FINALIZE_SAFETY_MS);
     };
 
     const finalizeReply = () => {
@@ -5250,7 +5330,7 @@ function toggleMenu(open) {
     const startReveal = () => {
       if (revealTimer) clearInterval(revealTimer);
       revealActive = true;
-      revealTimer = setInterval(() => {
+      revealTimer = ownSetInterval(() => {
         if (destroyed) { stopReveal(); return; }
         if (displayedLen < currentBotMessage.length) {
           const backlog = currentBotMessage.length - displayedLen;
@@ -5293,6 +5373,10 @@ function toggleMenu(open) {
           smoothScrollTarget = null;
         }
         firstChunk = false;
+        // Legacy dots: drop them right here (as before the timeline);
+        // statusTimelineCollapse below then runs its callback synchronously
+        // because no timeline is mounted, and the answer starts typing.
+        if (useLegacyLoadingDots) setLoading(false);
         // The answer is starting: fade the timeline out (text keeps
         // buffering meanwhile), then swap in the answer typing from its
         // first characters. One element owns the stage at a time — the
@@ -5395,7 +5479,7 @@ function toggleMenu(open) {
 
     (async () => {
       try {
-        const resp = await fetch('https://portal.ultimo-bots.com/api/chatbot_response', {
+        const resp = await fetch(`https://portal.ultimo-bots.com/api/chatbot_response?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -6150,7 +6234,7 @@ function toggleMenu(open) {
     track.addEventListener('scroll', refresh, { passive: true });
     // Re-evaluate once laid out and again as images settle (width can change).
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(refresh);
-    setTimeout(refresh, 300);
+    ownSetTimeout(refresh, 300);
     track.querySelectorAll('img').forEach((img) => img.addEventListener('load', refresh));
 
     root.appendChild(leftBtn);
@@ -6284,8 +6368,8 @@ function toggleMenu(open) {
         });
       });
     }
-    setTimeout(() => { chatBody.scrollTop = chatBody.scrollHeight; }, 120);
-    setTimeout(() => { chatBody.scrollTop = chatBody.scrollHeight; }, 360);
+    ownSetTimeout(() => { chatBody.scrollTop = chatBody.scrollHeight; }, 120);
+    ownSetTimeout(() => { chatBody.scrollTop = chatBody.scrollHeight; }, 360);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -6381,7 +6465,7 @@ function toggleMenu(open) {
     el.dataset.full = detail;
     if (statusDetailTimer) { clearInterval(statusDetailTimer); statusDetailTimer = null; }
     let shown = 0;
-    statusDetailTimer = setInterval(() => {
+    statusDetailTimer = ownSetInterval(() => {
       shown += 2;
       el.textContent = '“' + detail.slice(0, shown) + '”';
       if (shown >= detail.length) { clearInterval(statusDetailTimer); statusDetailTimer = null; }
@@ -6433,7 +6517,7 @@ function toggleMenu(open) {
     statusListEl.classList.add('collapsing');
     if (statusCollapseTimer) clearTimeout(statusCollapseTimer);
     // Timer must outlast the CSS fade+fold (ends ~440ms).
-    statusCollapseTimer = setTimeout(() => {
+    statusCollapseTimer = ownSetTimeout(() => {
       statusTimelineRemove();
       onDone();
     }, 460);
@@ -6601,7 +6685,7 @@ function toggleMenu(open) {
           // ReferenceError that used to wipe the whole saved history. One tick
           // later module evaluation has finished and the gallery builds fine.
           const products = msg.products;
-          setTimeout(() => {
+          ownSetTimeout(() => {
             try { attachProductsToRow(row, products); } catch (err) {
               console.warn('Could not restore a product gallery:', err);
             }

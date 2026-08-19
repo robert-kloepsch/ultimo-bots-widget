@@ -69,6 +69,13 @@ const check = (name, ok, detail) => {
       tag.integrity === expectedSri,
       `page     ${tag.integrity}\n        our build ${expectedSri}`);
   }
+  // Marketplace guideline: every injected external script tag carries a valid
+  // SRI integrity attribute AND crossorigin="anonymous" so the browser can
+  // verify it tamper-evidently. Webflow renders the tag for hosted scripts;
+  // this proves it did.
+  check('script tag: crossorigin="anonymous" present (SRI is enforceable)',
+    !!tag && String(tag.crossOrigin).toLowerCase() === 'anonymous',
+    tag ? `crossorigin=${tag.crossOrigin}` : 'no tag');
 
   // 2. The runtime actually executed (SRI mismatch would silently block it).
   const mount = await page.evaluate(() => {
