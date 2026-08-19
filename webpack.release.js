@@ -20,7 +20,12 @@ module.exports = {
     publicPath: '',
   },
   mode: 'production',
-  devtool: false,
+  // A source map is published NEXT TO the runtime (ultimo-widget.js.map) and
+  // referenced by the sourceMappingURL comment, so the executed bytes can be
+  // read alongside their source (Webflow App Review Preflight: "Runtime is
+  // not traceable to source"). The map is for review; it loads only when
+  // devtools ask for it and is never executed.
+  devtool: 'source-map',
   plugins: [
     // The hosted (Webflow) runtime must not carry host-page commerce code:
     // `false` compiles the add-to-cart / theme-cart-sync chain out entirely

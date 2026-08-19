@@ -257,9 +257,64 @@ async function testMount() {
       const host = document.getElementById(`ultimo-bots-container-TESTBOT`);
       return !!(host && host.shadowRoot && host.shadowRoot.querySelector('.saicf-chat-widget-icon'));
     });
-    record('mount: one namespaced instance, launcher rendered',
-      ids.length === 1 && ids[0] === BOT && launcher,
-      `instances=${JSON.stringify(ids)} launcher=${launcher}`);
+    // Ready signal: the host element carries data-runtime-ready once the
+    // configuration is loaded and the launcher is in the tree (the Webflow
+    // App Review Preflight harness waits for a light-DOM selector).
+    const ready = await page.evaluate(() => {
+      const el = document.querySelector('[data-runtime-ready]');
+      return !!el && el.id === 'ultimo-bots-container-TESTBOT';
+    });
+    record('mount: one namespaced instance, launcher rendered, ready marker set',
+      ids.length === 1 && ids[0] === BOT && launcher && ready,
+      `instances=${JSON.stringify(ids)} launcher=${launcher} ready=${ready}`);
+  });
+}
+
+// ── 9. A re-injected copy of the runtime (no attributes) still works ───────
+// A harness, tag manager or SPA may execute our file a second time from a
+// tag that carries no data-bot_id. The bot id then comes from the page's own
+// Webflow-applied tag, and the registry guard prevents a second mount.
+async function testReinjectedRuntime() {
+  await withPage(async ({ page, base }) => {
+    await page.goto(base);
+    await mounted(page);
+    await page.evaluate(() => {
+      const s = document.createElement('script');
+      s.src = '/ultimo-widget.js';              // same file, NO data-bot_id
+      document.head.appendChild(s);
+    });
+    await page.waitForTimeout(3000);
+    const r = await page.evaluate(() => ({
+      instances: Object.keys(window.__ULTIMO_BOTS__.instances),
+      hosts: document.querySelectorAll('[id^="ultimo-bots-container-"]').length,
+      launchers: document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot.querySelectorAll('.saicf-chat-widget-icon').length,
+      errors: 0,
+    }));
+    record('re-injected runtime without attributes: no second mount, one host, one launcher',
+      r.instances.length === 1 && r.hosts === 1 && r.launchers === 1,
+      JSON.stringify(r));
+  });
+}
+
+// ── 10. Runtime injected ONLY without attributes resolves the id from the page tag ─
+async function testInjectedOnlyResolvesFromPageTag() {
+  // Serve a host page whose own tag is inert (type=text/plain so it does not
+  // execute) but carries data-bot_id, then inject the runtime without
+  // attributes: the fallback must find the bot id on the page tag.
+  await withPage(async ({ page, base }) => {
+    await page.route('**/inert-host', (route) => route.fulfill({
+      status: 200, contentType: 'text/html',
+      body: `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
+        <h1>Host</h1>
+        <script type="text/plain" src="https://widget.ultimo-bots.com/1.3.1/ultimo-widget.js" data-bot_id="TESTBOT"></script>
+        <script>const s=document.createElement('script'); s.src='/ultimo-widget.js'; document.head.appendChild(s);</script>
+      </body></html>`,
+    }));
+    await page.goto(base + 'inert-host');
+    await mounted(page);
+    const ok = await page.evaluate(() => !!document.querySelector('#ultimo-bots-container-TESTBOT[data-runtime-ready]'));
+    record('injected runtime (no attributes) takes the bot id from the page own Webflow tag',
+      ok, `ready host present=${ok}`);
   });
 }
 
@@ -550,6 +605,8 @@ async function testMobileHostIsolation() {
     testAgentPopupKeyboard,
     testTeardownCensus,
     testMobileHostIsolation,
+    testReinjectedRuntime,
+    testInjectedOnlyResolvesFromPageTag,
   ];
   for (const t of suite) {
     try {

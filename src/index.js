@@ -13,9 +13,18 @@ import { createGameCenter, gameStyles } from './games/index.js';
 // (ScriptApply.attributes) and no container div exists — the bootstrap
 // creates the container from this.
 const OWN_SCRIPT_BOT_ID = (() => {
-  const s = document.currentScript;
-  if (!s || !s.getAttribute) return null;
-  return s.getAttribute('data-bot_id') || s.getAttribute('data-user-id');
+  const read = (el) => (el && el.getAttribute)
+    ? (el.getAttribute('data-bot_id') || el.getAttribute('data-user-id'))
+    : null;
+  const own = read(document.currentScript);
+  if (own) return own;
+  // The executing tag carries no bot id (the runtime was re-injected by a
+  // harness, a tag manager or an SPA re-execution). The page's own Webflow-
+  // applied tag still does: it is the only script from our hosted location
+  // that carries data-bot_id. Take the id from there, never from anywhere
+  // else.
+  const tags = document.querySelectorAll('script[src^="https://widget.ultimo-bots.com/"][data-bot_id]');
+  return tags.length === 1 ? read(tags[0]) : null;
 })();
 
 const FONT_SOURCES = {
@@ -3016,6 +3025,11 @@ async function initializeChatWidget(hostContainer) {
   widgetRoot.appendChild(chatOverlay);
   widgetRoot.appendChild(chatWindow);
   widgetRoot.appendChild(popUpContainer);
+  // Ready signal: the configuration is loaded and the launcher is in the
+  // tree, so the runtime is usable from here on. A light-DOM attribute on our
+  // own host element (never on the page's elements), so a test harness can
+  // wait for `[data-runtime-ready]` / the host id with document.querySelector.
+  container.setAttribute('data-runtime-ready', '1');
 
   if (horizontalAlignment === 'left') {
     chatWidgetIcon.classList.add('align-left');

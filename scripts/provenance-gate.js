@@ -30,6 +30,7 @@ const ARTIFACT = path.join(ROOT, 'release', VERSION, 'ultimo-widget.js');
 const BACKEND = path.join(ROOT, '..', 'ultimo-bots-backend', 'src', 'controller', 'webflow.py');
 
 const sri = (buf) => `sha384-${crypto.createHash('sha384').update(buf).digest('base64')}`;
+const sri256 = (buf) => `sha256-${crypto.createHash('sha256').update(buf).digest('base64')}`;
 const problems = [];
 const ok = [];
 
@@ -58,7 +59,7 @@ if (fs.existsSync(BACKEND)) {
   const v = (py.match(/WIDGET_VERSION\s*=\s*"([^"]+)"/) || [])[1];
   const h = (py.match(/WIDGET_INTEGRITY_HASH\s*=\s*"([^"]+)"/) || [])[1];
   if (v !== VERSION) problems.push(`backend WIDGET_VERSION is ${v}, package.json says ${VERSION}`);
-  else if (localSri && h !== localSri) problems.push(`backend WIDGET_INTEGRITY_HASH does not match the local build\n      backend ${h}\n      build   ${localSri}`);
+  else if (localSri && h !== localSri && h !== sri256(local)) problems.push(`backend WIDGET_INTEGRITY_HASH does not match the local build\n      backend ${h}\n      build   ${localSri}`);
   else ok.push('backend version and hash match the build');
 } else {
   problems.push(`backend not found at ${BACKEND} — cannot verify the registered hash`);

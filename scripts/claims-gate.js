@@ -110,6 +110,7 @@ const fetchCdn = (url) => new Promise((resolve, reject) => {
   // list is an undisclosed external connection and fails the claim.
   const KNOWN_HOSTS = {
     'https://portal.ultimo-bots.com': 'our API (all backend calls)',
+    'https://widget.ultimo-bots.com': 'our own hosted-script location, used only to recognise the page Webflow-applied tag (bot-id fallback), no request',
     'https://www.ultimo-bots.com': '"powered by" link target, no request',
     'https://fonts.googleapis.com': 'Google Fonts stylesheet, only when the customer picks one of six fonts',
     'http://www.w3.org': 'XML namespaces inside DOMPurify (SVG/MathML/XHTML), no request',
@@ -126,8 +127,11 @@ const fetchCdn = (url) => new Promise((resolve, reject) => {
     const py = fs.readFileSync(BACKEND, 'utf8');
     const v = (py.match(/WIDGET_VERSION\s*=\s*"([^"]+)"/) || [])[1];
     const h = (py.match(/WIDGET_INTEGRITY_HASH\s*=\s*"([^"]+)"/) || [])[1];
-    check('LOCK1', `backend registers version ${VERSION} with this artifact's SRI`, v === VERSION && h === hash,
-      { backendVersion: v, backendHash: h, artifactHash: hash });
+    // The backend may register the artifact with a sha256 or a sha384 SRI;
+    // both are valid for the same bytes. Accept whichever it uses.
+    const sri256 = `sha256-${crypto.createHash('sha256').update(buf).digest('base64')}`;
+    check('LOCK1', `backend registers version ${VERSION} with this artifact's SRI`, v === VERSION && (h === hash || h === sri256),
+      { backendVersion: v, backendHash: h, artifactSha384: hash, artifactSha256: sri256 });
   }
 
   // ── Report ───────────────────────────────────────────────────────────────
