@@ -27,9 +27,12 @@ const pkg = require('../package.json');
 const EXPECTED_VERSION = pkg.version;
 const EXPECTED_SRC = `https://widget.ultimo-bots.com/${EXPECTED_VERSION}/ultimo-widget.js`;
 const localArtifact = path.join(__dirname, '..', 'release', EXPECTED_VERSION, 'ultimo-widget.js');
-const expectedSri = fs.existsSync(localArtifact)
-  ? `sha384-${crypto.createHash('sha384').update(fs.readFileSync(localArtifact)).digest('base64')}`
+// The tag may carry a sha256 or a sha384 integrity value for the same bytes
+// (1.3.1 registers sha256, which the App Review Preflight tool expects).
+const expectedSris = fs.existsSync(localArtifact)
+  ? ['sha256', 'sha384'].map((alg) => `${alg}-${crypto.createHash(alg).update(fs.readFileSync(localArtifact)).digest('base64')}`)
   : null;
+const expectedSri = expectedSris ? expectedSris.join(' | ') : null;
 
 const results = [];
 const check = (name, ok, detail) => {
@@ -66,7 +69,7 @@ const check = (name, ok, detail) => {
 
   if (tag && expectedSri) {
     check('SRI matches the artifact we built',
-      tag.integrity === expectedSri,
+      expectedSris.includes(tag.integrity),
       `page     ${tag.integrity}\n        our build ${expectedSri}`);
   }
   // Marketplace guideline: every injected external script tag carries a valid
