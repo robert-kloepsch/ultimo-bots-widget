@@ -155,6 +155,43 @@ function resolveDisclosureText() {
   return AI_DISCLOSURE_TEXT[lang] || AI_DISCLOSURE_TEXT.en;
 }
 
+// ── Pre-chat form ("Enforce User Details") in the visitor's language ──
+// Robert, 18.10.2026: customers abroad asked for it. The widget translates its own texts here; the owner's field
+// labels come translated from the backend (warm_lead_function -> user_display_i18n.labels), with the owner's label
+// as the fallback. The values a visitor enters are stored under the field's name whatever language the form showed.
+const PRE_CHAT_TEXT = {
+  en: { title: 'Before we start chatting', subtitle: 'Please provide your details to continue',
+        start: 'Start Chat', submitting: 'Submitting…', anyLanguage: 'You can chat with us in any language.' },
+  de: { title: 'Bevor wir loslegen', subtitle: 'Bitte geben Sie Ihre Angaben ein, um fortzufahren',
+        start: 'Chat starten', submitting: 'Wird gesendet…', anyLanguage: 'Sie können in jeder Sprache mit uns chatten.' },
+  fr: { title: 'Avant de commencer', subtitle: 'Veuillez indiquer vos coordonnées pour continuer',
+        start: 'Démarrer le chat', submitting: 'Envoi…', anyLanguage: 'Vous pouvez nous écrire dans n’importe quelle langue.' },
+  es: { title: 'Antes de empezar', subtitle: 'Indique sus datos para continuar',
+        start: 'Iniciar chat', submitting: 'Enviando…', anyLanguage: 'Puede escribirnos en cualquier idioma.' },
+  it: { title: 'Prima di iniziare', subtitle: 'Inserisca i suoi dati per continuare',
+        start: 'Avvia chat', submitting: 'Invio…', anyLanguage: 'Può scriverci in qualsiasi lingua.' },
+  pt: { title: 'Antes de começarmos', subtitle: 'Indique os seus dados para continuar',
+        start: 'Iniciar conversa', submitting: 'A enviar…', anyLanguage: 'Pode escrever-nos em qualquer língua.' },
+  nl: { title: 'Voordat we beginnen', subtitle: 'Vul uw gegevens in om verder te gaan',
+        start: 'Chat starten', submitting: 'Bezig met verzenden…', anyLanguage: 'U kunt in elke taal met ons chatten.' },
+  pl: { title: 'Zanim zaczniemy', subtitle: 'Podaj swoje dane, aby kontynuować',
+        start: 'Rozpocznij czat', submitting: 'Wysyłanie…', anyLanguage: 'Możesz pisać do nas w dowolnym języku.' },
+};
+
+// The visitor's first browser language the form knows, otherwise the page's <html lang>, otherwise English.
+function resolveVisitorLanguage() {
+  const pick = (code) => {
+    const c = String(code || '').slice(0, 2).toLowerCase();
+    return Object.prototype.hasOwnProperty.call(PRE_CHAT_TEXT, c) ? c : null;
+  };
+  const browser = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language];
+  for (const code of browser) {
+    const c = pick(code);
+    if (c) return c;
+  }
+  return pick(document.documentElement && document.documentElement.lang) || 'en';
+}
+
 // The icon carries the customer's theme colour, but a pale brand would be
 // invisible on the light strip, so darken it (hue intact) until it clears the
 // WCAG 3:1 floor for non-text UI. Same "never unreadable" idea as the CTA above.
@@ -1767,6 +1804,12 @@ async function initializeChatWidget() {
       margin: 0;
     }
 
+    .saicf-pre-chat-header .saicf-pre-chat-note {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #555;
+    }
+
     .saicf-pre-chat-fields {
       width: 100%;
       max-width: 320px;
@@ -1787,7 +1830,6 @@ async function initializeChatWidget() {
       font-weight: 600;
       color: #444;
       margin-bottom: 5px;
-      text-transform: capitalize;
     }
 
     .saicf-pre-chat-field input {
@@ -2333,6 +2375,9 @@ async function initializeChatWidget() {
   let useLegacyLoadingDots = false;
   let promotingText = 'This website is powered by smart AI chatbots from Ultimo Bots.';
   let preChatFields = [];
+  let preChatAnyLanguage = false;
+  const preChatLang = resolveVisitorLanguage();
+  const preChatText = PRE_CHAT_TEXT[preChatLang];
   let requirePreChat = false;
   const PRE_CHAT_KEY = `saicf-prechat-completed-${botId}`;
   let preChatCompleted = localStorage.getItem(PRE_CHAT_KEY) === '1';
@@ -2380,6 +2425,7 @@ async function initializeChatWidget() {
         if (warmLeadRes.ok) {
           const warmLeadData = await warmLeadRes.json();
           const allParams = warmLeadData.bot_function_parameters || [];
+          preChatAnyLanguage = warmLeadData.any_language_note === true;
 
           // Filter to only the required fields
           preChatFields = allParams.filter(p => requiredFieldIds.includes(p.id));
@@ -2653,11 +2699,12 @@ async function initializeChatWidget() {
         <svg class="saicf-pre-chat-icon" style="color:${themeColor};" viewBox="0 0 640 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
           <path d="M208 352c114.9 0 208-78.8 208-176S322.9 0 208 0S0 78.8 0 176c0 38.6 14.7 74.3 39.6 103.4c-3.5 9.4-8.7 17.7-14.2 24.7c-4.8 6.2-9.7 11-13.3 14.3c-1.8 1.6-3.3 2.9-4.3 3.7c-.5 .4-.9 .7-1.1 .8l-.2 .2 0 0 0 0C1 327.2-1.4 334.4 .8 340.9S9.1 352 16 352c21.8 0 43.8-5.6 62.1-12.5c9.2-3.5 17.8-7.4 25.3-11.4C134.1 343.3 169.8 352 208 352zM448 176c0 112.3-99.1 196.9-216.5 207C255.8 457.4 336.4 512 432 512c38.2 0 73.9-8.7 104.7-23.9c7.5 4 16 7.9 25.2 11.4c18.3 6.9 40.3 12.5 62.1 12.5c6.9 0 13.1-4.5 15.2-11.1c2.1-6.6-.2-13.8-5.8-17.9l0 0 0 0-.2-.2c-.2-.2-.6-.4-1.1-.8c-1-.8-2.5-2-4.3-3.7c-3.6-3.3-8.5-8.1-13.3-14.3c-5.5-7-10.7-15.4-14.2-24.7c24.9-29 39.6-64.7 39.6-103.4c0-92.8-84.9-168.9-192.6-175.5c.4 5.1 .6 10.3 .6 15.5z"/>
         </svg>
-        <h3>Before we start chatting</h3>
-        <p>Please provide your details to continue</p>
+        <h3>${preChatText.title}</h3>
+        <p>${preChatText.subtitle}</p>
+        <p class="saicf-pre-chat-note hidden">${preChatText.anyLanguage}</p>
       </div>
       <div class="saicf-pre-chat-fields"></div>
-      <button class="saicf-pre-chat-submit" disabled>Start Chat</button>
+      <button class="saicf-pre-chat-submit" disabled>${preChatText.start}</button>
       ${poweredByHTML}
     </div>
     <div class="saicf-chat-body hidden"></div>
@@ -2949,21 +2996,32 @@ async function initializeChatWidget() {
   const preChatFormValues = {};
 
   // Function to render pre-chat form fields
+  // the field's label in the visitor's language (translated by the backend), else the owner's label
+  function preChatLabel(field) {
+    const labels = field.user_display_i18n && field.user_display_i18n.labels;
+    const text = String((labels && labels[preChatLang]) || field.user_display || field.name || '');
+    // first letter only: "capitalize" on every word turned translations into "Nom De L'entreprise"
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
   function renderPreChatFields() {
     preChatFieldsContainer.innerHTML = '';
+    const note = preChatContainer.querySelector('.saicf-pre-chat-note');
+    if (note) note.classList.toggle('hidden', !preChatAnyLanguage);
 
     preChatFields.forEach(field => {
       const fieldWrapper = document.createElement('div');
       fieldWrapper.className = 'saicf-pre-chat-field';
 
       const label = document.createElement('label');
-      label.textContent = field.user_display || field.name;
+      const fieldLabel = preChatLabel(field);
+      label.textContent = fieldLabel;
       label.setAttribute('for', `prechat-field-${field.id}`);
 
       const input = document.createElement('input');
       input.type = field.name.toLowerCase().includes('email') ? 'email' : 'text';
       input.id = `prechat-field-${field.id}`;
-      input.placeholder = `Enter your ${(field.user_display || field.name).toLowerCase()}`;
+      input.placeholder = fieldLabel;
       input.required = true;
 
       preChatFormValues[field.id] = '';
@@ -2991,7 +3049,7 @@ async function initializeChatWidget() {
   // Function to submit pre-chat form
   async function submitPreChatForm() {
     preChatSubmitBtn.disabled = true;
-    preChatSubmitBtn.textContent = 'Submitting...';
+    preChatSubmitBtn.textContent = preChatText.submitting;
 
     try {
       // Build params object matching chatModal.js format: {fieldName: value}
@@ -3044,7 +3102,7 @@ async function initializeChatWidget() {
       }
     } catch (err) {
       console.error('Error submitting pre-chat form:', err);
-      preChatSubmitBtn.textContent = 'Start Chat';
+      preChatSubmitBtn.textContent = preChatText.start;
       preChatSubmitBtn.disabled = false;
     }
   }
