@@ -3217,13 +3217,26 @@ function toggleMenu(open) {
     setStoredSessionToken(null);
     wsAuthenticated = false;
 
+    // Old history first, new session id last: other tabs react to the id and
+    // must not find the old history under it.
+    convRemove(CONV_HISTORY_KEY);
+    convRemove(CONV_AGENT_MSG_KEY);
     sessionId = generateSessionId();
-    sessionStorage.setItem(`sessionId-${botId}`, sessionId);
-    sessionStorage.removeItem(`chat-history-${botId}`);
+    convSet(CONV_SESSION_KEY, sessionId);
 
     // W17: Don't restart heartbeat for new session — wait for first message
     liveHeartbeatStarted = false;
 
+    clearChatBody();
+
+    if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
+      welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
+    }
+
+    chatInput.focus();
+  }
+
+  function clearChatBody() {
     chatBody.innerHTML = '';
 
     // Re-add spacer elements after clearing
@@ -3248,12 +3261,6 @@ function toggleMenu(open) {
       if (legacyDots) legacyDots.remove();
     }
     resetStreamingBotMessage();
-
-    if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
-      welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
-    }
-
-    chatInput.focus();
   }
 
   clearBtn.addEventListener('click', (e) => {
@@ -3588,8 +3595,60 @@ function toggleMenu(open) {
     });
   }
 
-  let sessionId = sessionStorage.getItem(`sessionId-${botId}`) || generateSessionId();
-  sessionStorage.setItem(`sessionId-${botId}`, sessionId);
+  // ── Conversation storage, shared by every tab of the site ──
+  // Session id, live token, chat history and the last agent message id live in
+  // localStorage: a link opened in a new tab continues the chat instead of
+  // starting a new session (and a second "new chat" notification). A
+  // conversation ends 30 minutes after its last activity (a message, or a
+  // heartbeat of any open tab). With localStorage blocked it stays per tab.
+  const CONV_IDLE_MS = 30 * 60 * 1000;
+  const CONV_SESSION_KEY = `sessionId-${botId}`;
+  const CONV_HISTORY_KEY = `chat-history-${botId}`;
+  const CONV_TOKEN_KEY = `ultimo_live_session_token-${botId}`;
+  const CONV_AGENT_MSG_KEY = `ultimo_live_last_agent_msg-${botId}`;
+  const CONV_ACTIVE_KEY = `ultimo_conv_active-${botId}`;
+  let convShared = false; // true when the tabs share localStorage
+  const convStore = (() => {
+    try {
+      localStorage.setItem(`${CONV_ACTIVE_KEY}-probe`, '1');
+      localStorage.removeItem(`${CONV_ACTIVE_KEY}-probe`);
+      convShared = true;
+      return localStorage;
+    } catch { return sessionStorage; }
+  })();
+  function convGet(key) {
+    try { return convStore.getItem(key); } catch { return null; }
+  }
+  function convSet(key, value) {
+    try { convStore.setItem(key, value); } catch { /* quota or blocked */ }
+  }
+  function convRemove(key) {
+    try { convStore.removeItem(key); } catch { /* blocked */ }
+  }
+  function convTouch() {
+    convSet(CONV_ACTIVE_KEY, String(Date.now()));
+  }
+  (function startConversationStorage() {
+    if (!convShared) return;
+    if (Date.now() - (Number(convGet(CONV_ACTIVE_KEY)) || 0) > CONV_IDLE_MS) {
+      [CONV_SESSION_KEY, CONV_HISTORY_KEY, CONV_TOKEN_KEY, CONV_AGENT_MSG_KEY].forEach(convRemove);
+    }
+    // A tab that ran the previous widget (sessionStorage only) keeps its chat,
+    // once: the old keys are removed, so a cleared or expired conversation can
+    // never come back from them.
+    try {
+      const legacy = [CONV_SESSION_KEY, CONV_HISTORY_KEY, CONV_TOKEN_KEY]
+        .map((key) => [key, sessionStorage.getItem(key)]);
+      if (!convGet(CONV_SESSION_KEY) && legacy[1][1]) {
+        legacy.forEach(([key, value]) => { if (value) convSet(key, value); });
+        convTouch();
+      }
+      legacy.forEach(([key]) => sessionStorage.removeItem(key));
+    } catch { /* sessionStorage blocked */ }
+  })();
+
+  let sessionId = convGet(CONV_SESSION_KEY) || generateSessionId();
+  convSet(CONV_SESSION_KEY, sessionId);
   let widgetOpenedOnce = popUpSeen;
   let streamingBotRow = null;
   let streamingBotBubble = null;
@@ -3597,8 +3656,15 @@ function toggleMenu(open) {
   // ── Live chat state ──
   let heartbeatInterval = null;
   let agentPollInterval = null;
-  let lastAgentMessageId = 0;
+  let lastAgentMessageId = Number(convGet(CONV_AGENT_MSG_KEY)) || 0;
   let liveSessionStatus = 'active'; // active | agent_requested | agent_joined
+  // Remembered with the conversation, so a reload or another tab fetches only
+  // the agent messages it has not shown yet.
+  function noteAgentMessageId(id) {
+    if (!id || id <= lastAgentMessageId) return;
+    lastAgentMessageId = id;
+    convSet(CONV_AGENT_MSG_KEY, String(id));
+  }
   let agentRequestPending = false;
   let liveHeartbeatStarted = false; // tracks whether heartbeat has been started for this session
   // W2: tracks whether the live WS has completed its widget_init handshake.
@@ -3609,18 +3675,13 @@ function toggleMenu(open) {
   // ── Live chat: session_token storage (W6) ──
   // The backend mints a session_token on first heartbeat response and
   // expects it back on every subsequent HTTP call that mutates or reads
-  // session state. Stored per-tab so multiple tabs don't clobber each
-  // other's tokens.
-  const LIVE_TOKEN_STORAGE_KEY = `ultimo_live_session_token-${botId}`;
+  // session state. Shared by the tabs with the conversation they share.
   function getStoredSessionToken() {
-    try { return sessionStorage.getItem(LIVE_TOKEN_STORAGE_KEY) || null; }
-    catch { return null; }
+    return convGet(CONV_TOKEN_KEY) || null;
   }
   function setStoredSessionToken(t) {
-    try {
-      if (t) sessionStorage.setItem(LIVE_TOKEN_STORAGE_KEY, t);
-      else sessionStorage.removeItem(LIVE_TOKEN_STORAGE_KEY);
-    } catch {}
+    if (t) convSet(CONV_TOKEN_KEY, t);
+    else convRemove(CONV_TOKEN_KEY);
   }
   // Drop all live state so the next user action re-bootstraps with a fresh
   // session_id + token. Called on 401 from any token-protected endpoint.
@@ -3642,8 +3703,9 @@ function toggleMenu(open) {
     wsConnecting = false;
     hideAgentBar();
     // Rotate the session id so the next heartbeat registers cleanly.
+    convRemove(CONV_AGENT_MSG_KEY);
     sessionId = generateSessionId();
-    try { sessionStorage.setItem(`sessionId-${botId}`, sessionId); } catch {}
+    convSet(CONV_SESSION_KEY, sessionId);
   }
   // Per-session agent display name. Set by `live_agent_joined` / `widget_init_ack`
   // events when the portal agent picked a custom name in JoinConversationModal.
@@ -3677,33 +3739,44 @@ function toggleMenu(open) {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
 
     wsConnecting = true;
+    let ws;
     try {
-      liveWs = new WebSocket('wss://portal.ultimo-bots.com/api/ws');
+      ws = new WebSocket('wss://portal.ultimo-bots.com/api/ws');
     } catch (err) {
       wsConnecting = false;
       console.error('WS constructor error:', err);
       scheduleWsReconnect();
       return;
     }
+    liveWs = ws;
+    // The token this socket's widget_init carried (see auth_error).
+    let initToken = null;
 
-    liveWs.addEventListener('open', () => {
+    // Every handler belongs to this socket only: once liveWs points elsewhere
+    // (chat cleared, session reset, another tab's conversation), a late
+    // open/message/close of this one is ignored instead of dropping the newer
+    // socket and reconnecting again.
+    ws.addEventListener('open', () => {
+      if (liveWs !== ws) return;
       wsConnecting = false;
       wsConnected = true;
       // W16: do NOT reset the backoff here. A 4401 auth rejection closes the
       // socket AFTER a successful open, so resetting on open would pin the
       // reconnect delay at ~1s forever (widget_init → 4401 → reconnect loop
       // hammering the backend). The backoff resets on widget_init_ack instead.
-      liveWs.send(JSON.stringify({
+      initToken = getStoredSessionToken();
+      ws.send(JSON.stringify({
         type: 'widget_init',
         session_id: sessionId,
         bot_id: botId,
-        session_token: getStoredSessionToken(),
+        session_token: initToken,
       }));
       // Switch polling to slower interval now that WS is live
       restartAgentPollingWithCurrentInterval();
     });
 
-    liveWs.addEventListener('message', (ev) => {
+    ws.addEventListener('message', (ev) => {
+      if (liveWs !== ws) return;
       let event;
       try { event = JSON.parse(ev.data); } catch { return; }
 
@@ -3736,6 +3809,7 @@ function toggleMenu(open) {
             joinAckSent = false;
             sendJoinAck();
           } else if (event.session_status && event.session_status !== 'agent_joined') {
+            if (event.session_status === 'agent_requested') restoreWaitingForAgent();
             // Backend says no agent is connected. If our local state is stale
             // (e.g. we missed a `live_agent_left` during a WS disconnect),
             // sync down so the agent bar is removed.
@@ -3756,8 +3830,9 @@ function toggleMenu(open) {
           // Deduplicate: skip if a message with this id is already rendered
           if (event.id && event.id <= lastAgentMessageId) break;
           if (!event.content) break;
+          // Remembered before appendMessage saves the history: a reload never shows it twice.
+          noteAgentMessageId(event.id);
           appendMessage(event.content, 'agent');
-          if (event.id && event.id > lastAgentMessageId) lastAgentMessageId = event.id;
           // Send ack via WS; fall back to HTTP if WS is not open
           if (event.id) sendMessageAck([event.id]);
           // If the chat window is currently minimized/closed, surface an
@@ -3834,19 +3909,21 @@ function toggleMenu(open) {
           // about to close the socket with 4401. Without this case the close
           // is treated as a transient disconnect and the widget reconnects
           // forever (~1s cadence), never healing. Two situations:
-          //   - we HOLD a token and it was rejected → it is stale; retrying
-          //     can never fix it. Reset immediately (rotates session_id +
-          //     drops the token, same recovery as an HTTP 401).
-          //   - we hold NO token → most likely the first-heartbeat response
-          //     (which delivers the minted token) is still in flight; the
-          //     next backoff reconnect will carry it. Only reset after the
-          //     3rd consecutive rejection (token never arrived, e.g. the
-          //     first-heartbeat response was lost to a page navigation).
+          //   - the token we SENT was rejected and is still the one we hold →
+          //     it is stale; retrying can never fix it. Reset immediately
+          //     (rotates session_id + drops the token, same recovery as an
+          //     HTTP 401).
+          //   - we sent NO token, or another one has arrived since (the
+          //     first-heartbeat response, ours or another tab's, landed while
+          //     widget_init was on its way) → the next backoff reconnect will
+          //     carry it. Judging by the token held NOW started a needless new
+          //     session (and a second "new chat" notification). Only reset
+          //     after the 3rd consecutive rejection (token never arrived).
           // Other auth_error reasons (e.g. a transient Redis lookup failure
           // server-side) fall through to the normal backoff reconnect.
           if (event.reason === 'invalid session_token') {
             wsAuthFailStreak += 1;
-            if (getStoredSessionToken() || wsAuthFailStreak >= 3) {
+            if ((initToken && initToken === getStoredSessionToken()) || wsAuthFailStreak >= 3) {
               wsAuthFailStreak = 0;
               resetLiveSessionForAuthFailure();
             }
@@ -3856,7 +3933,8 @@ function toggleMenu(open) {
       }
     });
 
-    liveWs.addEventListener('close', () => {
+    ws.addEventListener('close', () => {
+      if (liveWs !== ws) return;
       wsConnecting = false;
       wsConnected = false;
       wsAuthenticated = false; // W2: WS is gone, upgrade polling cadence
@@ -3868,7 +3946,8 @@ function toggleMenu(open) {
       scheduleWsReconnect();
     });
 
-    liveWs.addEventListener('error', () => {
+    ws.addEventListener('error', () => {
+      if (liveWs !== ws) return;
       wsConnecting = false;
       wsAuthenticated = false; // W2
       // close event will follow; nothing extra needed here
@@ -4144,7 +4223,7 @@ function toggleMenu(open) {
         if (res.status === 400 || res.status === 401) {
           setStoredSessionToken(null);
           sessionId = generateSessionId();
-          sessionStorage.setItem(`sessionId-${botId}`, sessionId);
+          convSet(CONV_SESSION_KEY, sessionId);
           try { await sendHeartbeat(); } catch { /* non-fatal */ }
           res = await fetch('https://portal.ultimo-bots.com/api/live/request_agent', {
             method: 'POST',
@@ -4172,6 +4251,14 @@ function toggleMenu(open) {
 
   // ── Live chat: Render "waiting for agent" UI (shared by menu-button click
   // and AI-tool-triggered `live_agent_requested` WS event) ──
+  // After a reload or in another tab the visitor is still waiting for an
+  // agent: show the waiting notice again and watch for the join.
+  function restoreWaitingForAgent() {
+    if (liveSessionStatus !== 'active') return;
+    showWaitingForAgentNotice();
+    startAgentPolling();
+  }
+
   function showWaitingForAgentNotice() {
     // Idempotent: if a waiting notice is already on screen, do nothing.
     if (chatBody.querySelector('.saicf-cancel-request')) return;
@@ -4354,7 +4441,7 @@ function toggleMenu(open) {
       // would be lost after a refresh while an agent is joined.
       if (
         chatBody.querySelectorAll('.saicf-message-row').length === 0 &&
-        !sessionStorage.getItem(`chat-history-${botId}`) &&
+        !convGet(CONV_HISTORY_KEY) &&
         Array.isArray(welcomeMessages) && welcomeMessages.length
       ) {
         welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
@@ -4442,10 +4529,10 @@ function toggleMenu(open) {
     }
   }
 
-  // W4: slow heartbeat while the tab is hidden but the visitor has an
-  // agent-related session that must stay alive. The server now keeps
-  // agent_requested / agent_joined sessions for up to 30 min, so a 60 s
-  // cadence is plenty to prevent GC without draining the battery.
+  // W4: slow heartbeat while the tab is hidden: the session stays alive (the
+  // server ends active sessions after 150 s without a beat) and the inbox
+  // shows the visitor as "in the background". 60 s is plenty without
+  // draining the battery.
   function startSlowHiddenHeartbeat() {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
@@ -4464,6 +4551,7 @@ function toggleMenu(open) {
         bot_id: botId,
         visitor_name: 'Website Visitor',
         page_url: window.location.href,
+        visibility: document.visibilityState === 'hidden' ? 'hidden' : 'visible',
       };
       if (storedToken) body.session_token = storedToken;
       const res = await fetch('https://portal.ultimo-bots.com/api/live/heartbeat', {
@@ -4484,7 +4572,10 @@ function toggleMenu(open) {
         }
         if (data.session_status === 'agent_joined' || data.session_status === 'active') {
           setLiveSessionStatusFn(data.session_status);
+        } else if (data.session_status === 'agent_requested') {
+          restoreWaitingForAgent();
         }
+        convTouch();
         // If agent joined and polling isn't running, start it immediately
         if (data.session_status === 'agent_joined' && !agentPollInterval) {
           startAgentPolling();
@@ -4502,8 +4593,10 @@ function toggleMenu(open) {
     // Connect WS immediately so real-time events arrive ASAP
     if (connectWs) connectLiveWs();
 
-    // If lastAgentMessageId is 0 (page reload / first join), seed it with
-    // the latest message ID so we don't re-display old messages.
+    // If lastAgentMessageId is 0 (first join of this conversation), seed it
+    // with the latest message ID so we don't re-display old messages. After a
+    // reload or in another tab it is remembered, so agent messages sent in
+    // between are fetched and shown instead of skipped.
     if (lastAgentMessageId === 0) {
       try {
         const tok = getStoredSessionToken();
@@ -4518,7 +4611,7 @@ function toggleMenu(open) {
           const seedData = await seedRes.json();
           const msgs = seedData.messages || [];
           if (msgs.length > 0) {
-            lastAgentMessageId = msgs[msgs.length - 1].id || 0;
+            noteAgentMessageId(msgs[msgs.length - 1].id || 0);
           }
           // Check status from seed response — agent may have joined during fetch
           if (seedData.status && seedData.status !== liveSessionStatus) {
@@ -4567,11 +4660,9 @@ function toggleMenu(open) {
       const messages = data.messages || [];
       for (const msg of messages) {
         if (msg.id && msg.id <= lastAgentMessageId) continue; // skip already-seen
+        noteAgentMessageId(msg.id);
         if (msg.type === 'agent' && msg.content) {
           appendMessage(msg.content, 'agent');
-        }
-        if (msg.id && msg.id > lastAgentMessageId) {
-          lastAgentMessageId = msg.id;
         }
       }
     } catch (err) {
@@ -4583,7 +4674,7 @@ function toggleMenu(open) {
   // Heartbeat drives session creation in the portal and is what powers the
   // "new visitor" / "new message" notifications — it must run regardless of
   // whether any agent is currently online — we always want to track sessions.
-  if (sessionStorage.getItem(`chat-history-${botId}`)) {
+  if (convGet(CONV_HISTORY_KEY)) {
     liveHeartbeatStarted = true;
     // Eagerly restore chat history BEFORE opening the WS. Otherwise the
     // backend's `widget_init_ack` (session_status='agent_joined') can arrive
@@ -4594,6 +4685,85 @@ function toggleMenu(open) {
     loadChatHistory().catch(() => { /* non-fatal */ });
     startHeartbeat();
   }
+
+  // ── Other tabs of this site ──
+  // They share the conversation. When one starts a new conversation (clear
+  // chat, token reset), follow it; when one adds messages (e.g. an AI
+  // answer), show them here too once this tab is not in the middle of a reply.
+  let historySyncPending = false;
+  let historySyncTimer = null;
+  function renderStoredConversation() {
+    clearChatBody();
+    if (convGet(CONV_HISTORY_KEY)) {
+      loadChatHistory().catch(() => { /* non-fatal */ });
+    } else if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
+      welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
+    }
+    // The waiting notice is not stored (it has a Cancel button): show it again.
+    if (liveSessionStatus === 'agent_requested') showWaitingForAgentNotice();
+  }
+  function adoptConversation(newSessionId) {
+    gameCenter.teardown();
+    stopHeartbeat();
+    stopAgentPolling();
+    hideAgentTyping();
+    const oldWs = liveWs;
+    liveWs = null;
+    if (oldWs) { try { oldWs.close(); } catch { /* non-fatal */ } }
+    wsConnected = false;
+    wsConnecting = false;
+    wsAuthenticated = false;
+    liveSessionStatus = 'active';
+    agentRequestPending = false;
+    joinAckSent = false;
+    currentAgentDisplayName = null;
+    hideAgentBar();
+    if (requestAgentBtn) {
+      const svgMarkup = requestAgentBtn.querySelector('svg')?.outerHTML || '';
+      requestAgentBtn.innerHTML = svgMarkup + ` ${liveSettings.request_button_text || 'Talk to a human'}`;
+      requestAgentBtn.classList.remove('is-disabled');
+    }
+    sessionId = newSessionId;
+    lastAgentMessageId = Number(convGet(CONV_AGENT_MSG_KEY)) || 0;
+    liveHeartbeatStarted = false;
+    renderStoredConversation();
+    if (convGet(CONV_HISTORY_KEY)) {
+      liveHeartbeatStarted = true;
+      startHeartbeat();
+    }
+  }
+  function syncConversationFromOtherTab() {
+    const storedSession = convGet(CONV_SESSION_KEY);
+    if (storedSession && storedSession !== sessionId) {
+      adoptConversation(storedSession);
+      return;
+    }
+    if (isBusy || streamingBotRow) {
+      historySyncPending = true;
+      if (!historySyncTimer) {
+        historySyncTimer = setTimeout(() => {
+          historySyncTimer = null;
+          syncConversationFromOtherTab();
+        }, 1500);
+      }
+      return;
+    }
+    historySyncPending = false;
+    lastAgentMessageId = Math.max(lastAgentMessageId, Number(convGet(CONV_AGENT_MSG_KEY)) || 0);
+    renderStoredConversation();
+    scrollToBottomHard();
+    // A tab opened before the chat began joins it now (WS for agent events,
+    // heartbeat that also restores a pending agent request).
+    if (!liveHeartbeatStarted && convGet(CONV_HISTORY_KEY)) {
+      liveHeartbeatStarted = true;
+      startHeartbeat();
+    }
+  }
+  window.addEventListener('storage', (event) => {
+    if (!convShared || event.storageArea !== convStore) return;
+    if (event.key !== CONV_SESSION_KEY && event.key !== CONV_HISTORY_KEY) return;
+    syncConversationFromOtherTab();
+  });
 
   // ── Graceful handling on tab close / refresh / navigation ──
   // We intentionally do NOT send /api/live/disconnect here. A `beforeunload`
@@ -4606,7 +4776,10 @@ function toggleMenu(open) {
   //   - Real close: heartbeat stops → `cleanup_stale` ends the session after
   //     the configured timeout → portal sees it vanish naturally.
   // Explicit disconnects (Clear chat) still call /api/live/disconnect.
-  window.addEventListener('beforeunload', () => {
+  //
+  // pagehide, not beforeunload: beforeunload also fires for a download link
+  // or a cancelled "leave this page?" dialog, and the heartbeat then stayed dead.
+  window.addEventListener('pagehide', () => {
     stopHeartbeat();
     if (liveHeartbeatStarted) {
       // Close WS cleanly so backend onclose fires; session row is untouched.
@@ -4615,6 +4788,10 @@ function toggleMenu(open) {
       }
     }
   });
+  // Back from the back/forward cache: the page did not reload, so resume.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted && liveHeartbeatStarted) startHeartbeat();
+  });
 
   // ── Pause/resume on tab visibility change ──
   document.addEventListener('visibilitychange', () => {
@@ -4622,22 +4799,18 @@ function toggleMenu(open) {
       // W1: also pause the safety-net agent poll while hidden — otherwise a
       // backgrounded tab keeps hammering /api/live/messages every 2–5 s.
       stopAgentPolling();
-      // W4: if a live agent is waiting / connected, the server keeps the
-      // session alive for up to 30 min — so we keep a slow 60 s heartbeat
-      // going instead of stopping entirely. In plain AI mode we can still
-      // take the full 45 s cleanup without hurting anyone.
-      if (
-        liveHeartbeatStarted &&
-        (liveSessionStatus === 'agent_requested' ||
-         liveSessionStatus === 'agent_joined')
-      ) {
+      // W4: keep a slow 60 s heartbeat in every mode and report the hidden
+      // tab at once, so the inbox shows "in the background" instead of
+      // "connection lost" and the chat does not end while the visitor reads
+      // another tab.
+      if (liveHeartbeatStarted) {
+        sendHeartbeat();
         startSlowHiddenHeartbeat();
-      } else {
-        stopHeartbeat();
       }
     } else {
       // W4: restore the normal 15 s cadence on return to foreground,
       // regardless of whether we were on the slow path or stopped.
+      if (historySyncPending) syncConversationFromOtherTab();
       if (liveHeartbeatStarted) {
         if (heartbeatInterval) {
           clearInterval(heartbeatInterval);
@@ -4890,6 +5063,9 @@ function toggleMenu(open) {
     // it independently of agent online presence.
     if (!liveHeartbeatStarted) {
       liveHeartbeatStarted = true;
+      startHeartbeat();
+    } else if (!heartbeatInterval) {
+      // A heartbeat that stopped on its own (e.g. pagehide followed by no unload) resumes.
       startHeartbeat();
     }
 
@@ -6219,7 +6395,8 @@ function toggleMenu(open) {
       }
     });
     try {
-      sessionStorage.setItem(`chat-history-${botId}`, JSON.stringify(items));
+      convStore.setItem(CONV_HISTORY_KEY, JSON.stringify(items));
+      convTouch();
     } catch (err) {
       // Quota/serialisation failure must never break the send flow — the live
       // DOM is correct either way; only reload-persistence degrades.
@@ -6228,7 +6405,7 @@ function toggleMenu(open) {
   }
 
   async function loadChatHistory() {
-    const saved = sessionStorage.getItem(`chat-history-${botId}`);
+    const saved = convGet(CONV_HISTORY_KEY);
     if (!saved) {
       return;
     }
@@ -6245,7 +6422,7 @@ function toggleMenu(open) {
       if (!Array.isArray(items)) throw new Error('saved history is not an array');
     } catch (error) {
       console.error('Failed to load chat history:', error);
-      sessionStorage.removeItem(`chat-history-${botId}`);
+      convRemove(CONV_HISTORY_KEY);
       return;
     }
 
