@@ -3714,6 +3714,8 @@ function toggleMenu(open) {
     wsConnected = false;
     wsConnecting = false;
     hideAgentBar();
+    // The old socket's close handler is ignored now (bound to its socket).
+    visitorIsTyping = false;
     // Rotate the session id so the next heartbeat registers cleanly.
     convRemove(CONV_AGENT_MSG_KEY);
     convRemove(CONV_RESUME_KEY);
@@ -4235,6 +4237,10 @@ function toggleMenu(open) {
         // mints a fresh one bound to the new session_id.
         if (res.status === 400 || res.status === 401) {
           setStoredSessionToken(null);
+          // The old session's ids go with it, so the new one gets its own resume secret.
+          convRemove(CONV_AGENT_MSG_KEY);
+          convRemove(CONV_RESUME_KEY);
+          lastAgentMessageId = 0;
           sessionId = generateSessionId();
           convSet(CONV_SESSION_KEY, sessionId);
           try { await sendHeartbeat(); } catch { /* non-fatal */ }
@@ -4790,6 +4796,8 @@ function toggleMenu(open) {
     wsConnected = false;
     wsConnecting = false;
     wsAuthenticated = false;
+    visitorIsTyping = false;
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
     liveSessionStatus = 'active';
     agentRequestPending = false;
     joinAckSent = false;
