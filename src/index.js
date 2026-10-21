@@ -3221,6 +3221,7 @@ function toggleMenu(open) {
     // must not find the old history under it.
     convRemove(CONV_HISTORY_KEY);
     convRemove(CONV_AGENT_MSG_KEY);
+    convRemove(CONV_RESUME_KEY);
     sessionId = generateSessionId();
     convSet(CONV_SESSION_KEY, sessionId);
 
@@ -3600,13 +3601,19 @@ function toggleMenu(open) {
   // localStorage: a link opened in a new tab continues the chat instead of
   // starting a new session (and a second "new chat" notification). A
   // conversation ends 30 minutes after its last activity (a message, or a
-  // heartbeat of any open tab). With localStorage blocked it stays per tab.
+  // heartbeat of any open tab), unless the team replied to it since: then it
+  // continues on the visitor's next visit, for up to 30 days. With localStorage
+  // blocked it stays per tab.
   const CONV_IDLE_MS = 30 * 60 * 1000;
+  const CONV_FOLLOWUP_MS = 30 * 24 * 60 * 60 * 1000;
   const CONV_SESSION_KEY = `sessionId-${botId}`;
   const CONV_HISTORY_KEY = `chat-history-${botId}`;
   const CONV_TOKEN_KEY = `ultimo_live_session_token-${botId}`;
   const CONV_AGENT_MSG_KEY = `ultimo_live_last_agent_msg-${botId}`;
   const CONV_ACTIVE_KEY = `ultimo_conv_active-${botId}`;
+  // Proves on a later visit that this browser owns the chat (see /api/live/resume).
+  const CONV_RESUME_KEY = `ultimo_live_resume-${botId}`;
+  let convResumeOnly = false; // back after a break: continue only if the team replied
   let convShared = false; // true when the tabs share localStorage
   const convStore = (() => {
     try {
@@ -3630,8 +3637,13 @@ function toggleMenu(open) {
   }
   (function startConversationStorage() {
     if (!convShared) return;
-    if (Date.now() - (Number(convGet(CONV_ACTIVE_KEY)) || 0) > CONV_IDLE_MS) {
-      [CONV_SESSION_KEY, CONV_HISTORY_KEY, CONV_TOKEN_KEY, CONV_AGENT_MSG_KEY].forEach(convRemove);
+    const idle = Date.now() - (Number(convGet(CONV_ACTIVE_KEY)) || 0);
+    if (idle > CONV_IDLE_MS) {
+      if (idle <= CONV_FOLLOWUP_MS && convGet(CONV_RESUME_KEY) && convGet(CONV_HISTORY_KEY)) {
+        convResumeOnly = true; // decided by resumeConversation() once the widget is up
+      } else {
+        [CONV_SESSION_KEY, CONV_HISTORY_KEY, CONV_TOKEN_KEY, CONV_AGENT_MSG_KEY, CONV_RESUME_KEY].forEach(convRemove);
+      }
     }
     // A tab that ran the previous widget (sessionStorage only) keeps its chat,
     // once: the old keys are removed, so a cleared or expired conversation can
@@ -3704,6 +3716,7 @@ function toggleMenu(open) {
     hideAgentBar();
     // Rotate the session id so the next heartbeat registers cleanly.
     convRemove(CONV_AGENT_MSG_KEY);
+    convRemove(CONV_RESUME_KEY);
     sessionId = generateSessionId();
     convSet(CONV_SESSION_KEY, sessionId);
   }
@@ -4554,6 +4567,7 @@ function toggleMenu(open) {
         visibility: document.visibilityState === 'hidden' ? 'hidden' : 'visible',
       };
       if (storedToken) body.session_token = storedToken;
+      if (convShared && !convGet(CONV_RESUME_KEY)) body.want_resume_secret = true;
       const res = await fetch('https://portal.ultimo-bots.com/api/live/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4570,6 +4584,7 @@ function toggleMenu(open) {
         if (data && data.session_token) {
           setStoredSessionToken(data.session_token);
         }
+        if (data && data.resume_secret) convSet(CONV_RESUME_KEY, data.resume_secret);
         if (data.session_status === 'agent_joined' || data.session_status === 'active') {
           setLiveSessionStatusFn(data.session_status);
         } else if (data.session_status === 'agent_requested') {
@@ -4674,7 +4689,7 @@ function toggleMenu(open) {
   // Heartbeat drives session creation in the portal and is what powers the
   // "new visitor" / "new message" notifications — it must run regardless of
   // whether any agent is currently online — we always want to track sessions.
-  if (convGet(CONV_HISTORY_KEY)) {
+  if (!convResumeOnly && convGet(CONV_HISTORY_KEY)) {
     liveHeartbeatStarted = true;
     // Eagerly restore chat history BEFORE opening the WS. Otherwise the
     // backend's `widget_init_ack` (session_status='agent_joined') can arrive
@@ -4684,6 +4699,68 @@ function toggleMenu(open) {
     // the "is chatBody empty?" guard no longer matches.
     loadChatHistory().catch(() => { /* non-fatal */ });
     startHeartbeat();
+  }
+  if (convResumeOnly) {
+    // Back after more than 30 minutes: the old chat continues only if the team
+    // has replied since; otherwise this visit starts a new one.
+    resumeConversation(true);
+  } else if (liveHeartbeatStarted) {
+    // Replies the team wrote while every tab of the site was closed.
+    resumeConversation(false);
+  }
+
+  // ── Replies written while the visitor was away ──
+  // The team can answer an ended chat for 30 days. The widget fetches those
+  // replies with the conversation's resume secret and shows them like any agent
+  // message, with the unread badge and pop-up while the chat is closed.
+  async function resumeConversation(afterBreak) {
+    const secret = convGet(CONV_RESUME_KEY);
+    let replies = [];
+    if (secret) {
+      try {
+        const res = await fetch('https://portal.ultimo-bots.com/api/live/resume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, bot_id: botId, resume_secret: secret, after_id: lastAgentMessageId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.session_token) setStoredSessionToken(data.session_token);
+          replies = (data.messages || []).filter((m) => m.id > lastAgentMessageId && m.content);
+        } else if (res.status === 401 || res.status === 410) {
+          convRemove(CONV_RESUME_KEY);
+        }
+      } catch { /* offline: the next visit tries again */ }
+    }
+    if (afterBreak) {
+      if (!replies.length) {
+        startNewConversation();
+        return;
+      }
+      liveHeartbeatStarted = true;
+      loadChatHistory().catch(() => { /* non-fatal */ });
+      startHeartbeat();
+    }
+    if (!replies.length) return;
+    replies.forEach((m) => {
+      if (m.id <= lastAgentMessageId) return;
+      noteAgentMessageId(m.id);
+      appendMessage(m.content, 'agent');
+    });
+    sendMessageAck(replies.map((m) => m.id));
+    if (!chatWindow.classList.contains('show')) {
+      unreadAgentCount += replies.length;
+      updateUnreadBadge();
+      showAgentMessagePopUp(replies[replies.length - 1].content);
+    }
+  }
+
+  // After a break with no reply from the team, this visit starts a new chat.
+  function startNewConversation() {
+    [CONV_HISTORY_KEY, CONV_TOKEN_KEY, CONV_AGENT_MSG_KEY, CONV_RESUME_KEY].forEach(convRemove);
+    lastAgentMessageId = 0;
+    sessionId = generateSessionId();
+    convSet(CONV_SESSION_KEY, sessionId);
   }
 
   // ── Other tabs of this site ──
