@@ -2793,6 +2793,7 @@ async function initializeChatWidget() {
       chatWindow.classList.remove('hidden');
       forceReflow(chatWindow);
       chatWindow.classList.add('show');
+      gameCenter.setWindowOpen(true);
       chatOverlay.classList.remove('hidden');
 
       if (window.matchMedia('(max-width: 768px)').matches) {
@@ -2880,6 +2881,23 @@ async function initializeChatWidget() {
       background: ${liveCtaColors.activeBg} !important;
       border-color: ${liveCtaColors.activeBg} !important;
     }
+    /* "X has joined the chat" right after the wait: same surface as the
+       header, so it reads as the moment the visitor was waiting for. */
+    @keyframes saicf-arrival-pulse {
+      0%   { box-shadow: 0 0 0 0 ${themeColor}66; }
+      70%  { box-shadow: 0 0 0 10px ${themeColor}00; }
+      100% { box-shadow: 0 0 0 0 ${themeColor}00; }
+    }
+    .saicf-system-notice.is-arrival .saicf-system-notice-text {
+      background: ${liveCtaColors.bg};
+      color: ${liveCtaColors.fg};
+      font-weight: 600;
+      padding: 6px 14px;
+      animation: saicf-arrival-pulse 1.6s ease-out 3;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .saicf-system-notice.is-arrival .saicf-system-notice-text { animation: none; }
+    }
     /* Product gallery: the "View" CTA text and the scroll-arrow hover state
        pick up the bot's configured theme colour. */
     .ub-pc-cta {
@@ -2923,8 +2941,34 @@ async function initializeChatWidget() {
   // Waiting-room games. Mounted on the chat WINDOW, not the body wrapper: the
   // game replaces everything under the header (disclosure strip, messages,
   // quick replies, composer) so it gets the full height and never scrolls.
-  // Pure UI: it owns no live-chat state, see src/games/index.js.
-  const gameCenter = createGameCenter({ mountTarget: chatWindow });
+  // Pure UI: it owns no live-chat state, see src/games/index.js. The
+  // leaderboard is per website; the session token proves a round came from a
+  // visitor who is really waiting (backend /api/live/games).
+  const gameCenter = createGameCenter({
+    mountTarget: chatWindow,
+    bestKey: (game) => `ultimo_game_best-${botId}-${game}`,
+    leaderboard: {
+      async fetch(game) {
+        const q = new URLSearchParams({ bot_id: botId, session_id: sessionId });
+        const res = await fetch(`https://portal.ultimo-bots.com/api/live/games/${game}/leaderboard?${q}`);
+        return res.ok ? res.json() : null;
+      },
+      async submit(game, score, durationMs) {
+        const res = await fetch(`https://portal.ultimo-bots.com/api/live/games/${game}/score`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bot_id: botId,
+            session_id: sessionId,
+            session_token: getStoredSessionToken(),
+            score,
+            duration_ms: durationMs,
+          }),
+        });
+        return res.ok ? res.json() : null;
+      },
+    },
+  });
 
   // Create spacer + sentinel elements for scroll positioning
   const bottomSpacerEl = document.createElement('div');
@@ -3850,6 +3894,7 @@ function toggleMenu(open) {
           appendMessage(event.content, 'agent');
           // Send ack via WS; fall back to HTTP if WS is not open
           if (event.id) sendMessageAck([event.id]);
+          if (document.hidden) flashTitle(`New message from ${effectiveAgentDisplayName('the agent')}`);
           // If the chat window is currently minimized/closed, surface an
           // unread badge on the icon and an attention pop-up so the visitor
           // doesn't miss the agent's reply.
@@ -4202,6 +4247,7 @@ function toggleMenu(open) {
         return;
       }
       if (agentRequestPending) return;
+      primeArrivalChime();
       requestAgentBtn.classList.add('is-disabled');
       agentRequestPending = true;
       try {
@@ -4335,6 +4381,11 @@ function toggleMenu(open) {
     }
     scrollToBottomHard();
     startAgentPolling();
+    // A request made before the visitor typed anything left no stored
+    // conversation: the next page of the site and the other tabs would then
+    // neither show the wait nor learn that the agent joined. The waiting
+    // notice itself is not stored, see saveChatHistory().
+    try { saveChatHistory(); } catch {}
     // Offer a game, but not right away — see DEFAULT_OFFER_DELAY_MS.
     gameCenter.armOffer(waitingNotice);
   }
@@ -4466,20 +4517,25 @@ function toggleMenu(open) {
         welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
       }
       // Skip re-appending the join notice only if the most recent system
-      // notice in the conversation is already this same "has joined" line.
-      // This prevents `widget_init_ack` replays (page reloads) from pushing
-      // a fresh join notice to the bottom, while still allowing a real
-      // leave → rejoin cycle to show a new join notice after the "has left"
-      // line that came before it.
+      // notice in the conversation is already a "has joined" line. This
+      // prevents `widget_init_ack` replays (page reloads) from pushing a fresh
+      // join notice to the bottom, while still allowing a real leave → rejoin
+      // cycle to show a new join notice after the "has left" line that came
+      // before it. Any name counts: a second tab of the same conversation may
+      // have shown the join under the bot-level fallback name.
       const joinNoticeText = `${agentName} has joined the chat.`;
       const allNotices = chatBody.querySelectorAll('.saicf-system-notice .saicf-system-notice-text');
       const lastNotice = allNotices.length ? allNotices[allNotices.length - 1] : null;
-      const alreadyShown = lastNotice && lastNotice.textContent === joinNoticeText;
+      const alreadyShown = !!lastNotice && lastNotice.textContent.endsWith(' has joined the chat.');
       if (!alreadyShown) {
         appendSystemNotice(joinNoticeText);
         // Persist the new notice so a future reload doesn't duplicate it.
         try { saveChatHistory(); } catch {}
       }
+      // Every tab of the conversation announces a join the visitor waited for,
+      // also when another tab wrote the notice first: the visitor may be
+      // looking at this one.
+      if (!alreadyShown || prev === 'agent_requested') announceAgentArrival(joinNoticeText);
       showAgentBar(agentName);
       scrollToBottomHard();
       startAgentPolling();
@@ -4528,6 +4584,109 @@ function toggleMenu(open) {
       }
     }
   }
+
+  // ── Live chat: make sure the visitor notices that the agent is here ──
+  // While waiting they may be playing a game (it closes, see above), have the
+  // chat minimised, or be in another tab. Each of these gets its own signal:
+  // the notice is highlighted, a closed chat gets the badge and a pop-up, a
+  // hidden tab gets a blinking title, and a chat out of sight a short chime.
+  // When the join was announced: another tab that stores the conversation
+  // makes this one redraw it, and the highlight must survive that.
+  let arrivalAnnouncedAt = 0;
+  function markArrivalNotice() {
+    const notices = chatBody.querySelectorAll('.saicf-system-notice');
+    const joinNotice = notices.length ? notices[notices.length - 1] : null;
+    if (joinNotice && joinNotice.textContent.endsWith(' has joined the chat.')) {
+      joinNotice.classList.add('is-arrival');
+    }
+  }
+  function announceAgentArrival(text) {
+    arrivalAnnouncedAt = Date.now();
+    markArrivalNotice();
+    const chatOpen = chatWindow.classList.contains('show');
+    if (!chatOpen) {
+      unreadAgentCount += 1;
+      updateUnreadBadge();
+      showAgentMessagePopUp(text);
+    }
+    if (document.hidden) flashTitle(text);
+    if (!chatOpen || document.hidden) playArrivalChime();
+  }
+
+  // The page's own title comes back as soon as the tab is visible again.
+  let titleFlashTimer = null;
+  let titleFlashText = '';
+  let titleFlashOriginal = '';
+  function flashTitle(text) {
+    titleFlashText = `\u{1F4AC} ${text}`;
+    if (titleFlashTimer) return;
+    titleFlashOriginal = document.title;
+    let on = false;
+    const tick = () => {
+      // The page changed its own title meanwhile: restore that one later.
+      if (document.title !== titleFlashText && document.title !== titleFlashOriginal) {
+        titleFlashOriginal = document.title;
+      }
+      on = !on;
+      document.title = on ? titleFlashText : titleFlashOriginal;
+    };
+    tick();
+    titleFlashTimer = setInterval(tick, 1200);
+  }
+  function stopTitleFlash() {
+    if (!titleFlashTimer) return;
+    clearInterval(titleFlashTimer);
+    titleFlashTimer = null;
+    if (document.title === titleFlashText) document.title = titleFlashOriginal;
+  }
+
+  // Browsers only let a page play sound after the visitor interacted with it.
+  // The audio context is therefore made on a tap while they wait, and reused
+  // when the agent arrives.
+  let arrivalAudio = null;
+  function primeArrivalChime() {
+    if (!arrivalAudio) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      try { arrivalAudio = new Ctx(); } catch { arrivalAudio = null; return; }
+    }
+    if (arrivalAudio.state === 'suspended') arrivalAudio.resume().catch(() => {});
+  }
+  function playArrivalChime() {
+    const chimeKey = `ultimo_live_chime-${botId}`;
+    const chimedJustNow = () => {
+      try { return Date.now() - (Number(localStorage.getItem(chimeKey)) || 0) < 5000; } catch { return false; }
+    };
+    if (chimedJustNow()) return;
+    primeArrivalChime();
+    const ctx = arrivalAudio;
+    if (!ctx) return;
+    const play = () => {
+      if (chimedJustNow()) return;
+      try { localStorage.setItem(chimeKey, String(Date.now())); } catch { /* chime anyway */ }
+      try {
+        const t = ctx.currentTime;
+        [[659.25, 0], [880, 0.15]].forEach(([freq, at]) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.0001, t + at);
+          gain.gain.exponentialRampToValueAtTime(0.12, t + at + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t + at);
+          osc.stop(t + at + 0.55);
+        });
+      } catch { /* no sound is fine */ }
+    };
+    if (ctx.state === 'running') play();
+    else ctx.resume().then(() => { if (ctx.state === 'running') play(); }).catch(() => {});
+  }
+  chatWindow.addEventListener('pointerdown', () => {
+    if (liveSessionStatus === 'agent_requested') primeArrivalChime();
+  }, { passive: true });
 
   // ── Live chat: Heartbeat ──
   function startHeartbeat() {
@@ -4591,6 +4750,7 @@ function toggleMenu(open) {
           setStoredSessionToken(data.session_token);
         }
         if (data && data.resume_secret) convSet(CONV_RESUME_KEY, data.resume_secret);
+        if (data.agent_display_name) currentAgentDisplayName = data.agent_display_name;
         if (data.session_status === 'agent_joined' || data.session_status === 'active') {
           setLiveSessionStatusFn(data.session_status);
         } else if (data.session_status === 'agent_requested') {
@@ -4669,6 +4829,7 @@ function toggleMenu(open) {
       if (!res.ok) return;
       const data = await res.json();
 
+      if (data.agent_display_name) currentAgentDisplayName = data.agent_display_name;
       if (data.status === 'agent_joined' || data.status === 'active') {
         const prevPollStatus = liveSessionStatus;
         setLiveSessionStatusFn(data.status);
@@ -4778,7 +4939,9 @@ function toggleMenu(open) {
   function renderStoredConversation() {
     clearChatBody();
     if (convGet(CONV_HISTORY_KEY)) {
-      loadChatHistory().catch(() => { /* non-fatal */ });
+      loadChatHistory()
+        .then(() => { if (Date.now() - arrivalAnnouncedAt < 15000) markArrivalNotice(); })
+        .catch(() => { /* non-fatal */ });
     } else if (Array.isArray(welcomeMessages) && welcomeMessages.length) {
       welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
     }
@@ -4893,6 +5056,7 @@ function toggleMenu(open) {
         startSlowHiddenHeartbeat();
       }
     } else {
+      stopTitleFlash();
       // W4: restore the normal 15 s cadence on return to foreground,
       // regardless of whether we were on the slow path or stopped.
       if (historySyncPending) syncConversationFromOtherTab();
@@ -4939,6 +5103,7 @@ function toggleMenu(open) {
     chatWindow.classList.remove('hidden');
     forceReflow(chatWindow);
     chatWindow.classList.add('show');
+    gameCenter.setWindowOpen(true);
     chatOverlay.classList.remove('hidden');
     if (window.matchMedia('(max-width: 768px)').matches) {
       // Mobile: fullscreen window, launcher hidden underneath.
@@ -5109,6 +5274,7 @@ function toggleMenu(open) {
 
   function closeChat() {
     chatWindow.classList.remove('show');
+    gameCenter.setWindowOpen(false);
     chatWidgetIcon.classList.remove('hidden');
     chatWidgetIcon.classList.remove('saicf-icon-open');
     chatOverlay.classList.add('hidden');

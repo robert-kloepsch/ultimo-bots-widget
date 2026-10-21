@@ -38,7 +38,7 @@ export function createWhackGame() {
   let ringEl = null;
   let secsEl = null;
   let scoreEl = null;
-  let restart = null;
+  let gameOver = null;
 
   let score = 0;
   let remaining = ROUND_MS;
@@ -119,14 +119,7 @@ export function createWhackGame() {
     // Back to a plain line: the ring is spent, and has-timer would keep the
     // flex row layout for a single sentence.
     ringEl = null;
-    statusEl.className = 'saicf-game-status is-win';
-    statusEl.textContent = score === 0 ? 'Time! Next round?' : `Time! You got ${score}`;
-    const again = document.createElement('button');
-    again.type = 'button';
-    again.className = 'saicf-game-again';
-    again.textContent = 'Play again';
-    again.addEventListener('click', () => restart?.());
-    root.appendChild(again); // below the board, see memory.js
+    gameOver?.({ score, durationMs: ROUND_MS, headline: score === 0 ? 'Time! Next round?' : "Time's up!" });
   }
 
   function start() {
@@ -162,10 +155,12 @@ export function createWhackGame() {
   return {
     id: 'whack',
     label: 'Whack-a-Mole',
+    order: 'desc',
+    unit: 'points',
 
     mount(el, ctx = {}) {
       root = el;
-      restart = ctx.restart || null;
+      gameOver = ctx.gameOver || null;
       clearTimers();
       score = 0;
       remaining = ROUND_MS;

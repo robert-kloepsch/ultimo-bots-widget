@@ -1,16 +1,21 @@
 // Waiting-room games: something to do while a live agent is being fetched.
 //
-// Contract with src/index.js is deliberately tiny — two calls:
-//   armOffer(noticeEl)  from showWaitingForAgentNotice()
-//   teardown()          from setLiveSessionStatusFn('agent_joined'), the
-//                       cancel handler, and any other exit from the wait
+// Contract with src/index.js is deliberately tiny:
+//   armOffer(noticeEl)     from showWaitingForAgentNotice()
+//   teardown()             from setLiveSessionStatusFn('agent_joined'), the
+//                          cancel handler, and any other exit from the wait
+//   setWindowOpen(bool)    from opening / closing the chat window
 //
 // This module owns NO live-chat state. It never touches the WS, the
 // heartbeat, the polling loop or the session token, which is why it does not
 // fall under the "keep useLiveAgent.js 1:1 in sync" rule — same reasoning as
-// the Shopify buy button. Keep it that way.
+// the Shopify buy button. Keep it that way: the leaderboard calls go through
+// the `leaderboard` adapter src/index.js passes in, which holds the token.
 //
-// Every game implements: { id, label, mount(el), destroy(), pause?(), resume?() }
+// Every game implements: { id, label, order, unit, mount(el, ctx), destroy(),
+// pause?(), resume?() }. `order` is 'desc' when a higher score is better.
+// A finished round calls ctx.gameOver({ score, durationMs, headline }); the
+// result screen with the leaderboard is drawn here, not in the game.
 // Games must be self-contained, asset-free and touch-first. The widget bundle
 // ships on every page of every customer site, so size is a hard budget, not a
 // preference. See CLAUDE.md.
@@ -34,6 +39,11 @@ const DEFAULT_OFFER_DELAY_MS = 0;
 // The one line of copy above the offer. Swap this string to change it.
 const OFFER_HINT = 'Nothing to do?';
 const OFFER_LABEL = 'Play a Game';
+
+// Rows on the leaderboard. A visitor below them sees the top 3, a gap and
+// their own row, so the list never needs more height than these rows.
+const BOARD_ROWS = 5;
+const MEDALS = ['\u{1F947}', '\u{1F948}', '\u{1F949}'];
 
 export function gameStyles(themeColor) {
   return `
@@ -343,10 +353,150 @@ export function gameStyles(themeColor) {
       cursor: pointer;
       animation: saicf-notice-in .3s ease-out;
     }
+
+    /* ── Result + leaderboard (replaces the board when a round ends) ── */
+    .saicf-game-result {
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      animation: saicf-notice-in .25s ease-out;
+    }
+    .saicf-game-result-head {
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+    }
+    .saicf-game-result-score {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      color: ${themeColor};
+    }
+    .saicf-game-result-num {
+      font-size: 40px;
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .saicf-game-result-unit {
+      font-size: 13px;
+      font-weight: 600;
+      color: #888;
+    }
+    .saicf-game-result-best {
+      font-size: 12px;
+      color: #888;
+      min-height: 16px;
+    }
+    .saicf-game-result-best.is-new {
+      color: ${themeColor};
+      font-weight: 600;
+    }
+    .saicf-game-lb {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #ececec;
+      border-radius: 12px;
+      padding: 8px 8px 6px;
+      margin: 4px 0 6px;
+    }
+    .saicf-game-lb-title {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 6px 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: #999;
+    }
+    .saicf-game-lb-count {
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    /* Fixed height for BOARD_ROWS rows: the list fills in after the request
+       without pushing the Play again button down. */
+    .saicf-game-lb-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      height: calc(${BOARD_ROWS} * 26px);
+    }
+    .saicf-game-lb-row {
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      height: 26px;
+      padding: 0 6px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #444;
+    }
+    .saicf-game-lb-rank {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #aaa;
+    }
+    .saicf-game-lb-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .saicf-game-lb-score {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .saicf-game-lb-row.is-you {
+      background: ${themeColor}14;
+      color: ${themeColor};
+      font-weight: 600;
+    }
+    .saicf-game-lb-gap {
+      height: 26px;
+      line-height: 20px;
+      text-align: center;
+      color: #bbb;
+    }
+    .saicf-game-lb-row.is-placeholder .saicf-game-lb-name::before {
+      content: '';
+      display: block;
+      width: 55%;
+      height: 8px;
+      border-radius: 4px;
+      background: #f0f0f0;
+    }
+    .saicf-game-lb-empty {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #999;
+    }
   `;
 }
 
-export function createGameCenter({ mountTarget, offerDelayMs = DEFAULT_OFFER_DELAY_MS }) {
+function readBest(key) {
+  try {
+    const v = parseInt(localStorage.getItem(key), 10);
+    return Number.isFinite(v) ? v : null;
+  } catch { return null; }
+}
+
+function writeBest(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch { /* private mode */ }
+}
+
+// `leaderboard` is { fetch(gameId), submit(gameId, score, durationMs) }, both
+// resolving to the board or null. Without it the result screen shows the
+// visitor's own best only.
+export function createGameCenter({ mountTarget, offerDelayMs = DEFAULT_OFFER_DELAY_MS, leaderboard = null, bestKey = null }) {
   // Survives close/reopen for the lifetime of the widget, so "back to chat"
   // and then Play again always hands out a different game.
   let lastGameIndex = -1;
@@ -357,6 +507,157 @@ export function createGameCenter({ mountTarget, offerDelayMs = DEFAULT_OFFER_DEL
   let overlay = null;
   let game = null;
   let onVisibility = null;
+  // A game must not run on while nobody can see it: neither in a hidden tab
+  // nor behind a minimised chat window.
+  let windowOpen = true;
+  let paused = false;
+  // False once the result screen is up: the round is over, nothing to pause.
+  let playing = false;
+  // Bumped whenever the stage is redrawn, so a leaderboard answer that comes
+  // back after a restart or close is dropped instead of drawn over the board.
+  let round = 0;
+
+  function syncPause() {
+    if (!game || !playing) return;
+    const shouldPause = document.hidden || !windowOpen;
+    if (shouldPause === paused) return;
+    paused = shouldPause;
+    if (paused) game.pause?.();
+    else game.resume?.();
+  }
+
+  function boardRow(rank, name, score, you) {
+    const li = document.createElement('li');
+    li.className = 'saicf-game-lb-row' + (you ? ' is-you' : '');
+    const r = document.createElement('span');
+    r.className = 'saicf-game-lb-rank';
+    r.textContent = rank <= MEDALS.length ? MEDALS[rank - 1] : String(rank);
+    const n = document.createElement('span');
+    n.className = 'saicf-game-lb-name';
+    n.textContent = you ? `${name} (you)` : name;
+    const s = document.createElement('span');
+    s.className = 'saicf-game-lb-score';
+    s.textContent = String(score);
+    li.append(r, n, s);
+    return li;
+  }
+
+  function drawBoard(box, board, bestEl) {
+    const list = box.querySelector('.saicf-game-lb-list');
+    list.innerHTML = '';
+    const top = board.top || [];
+    const you = board.you;
+    box.querySelector('.saicf-game-lb-count').textContent =
+      board.players ? `${board.players} ${board.players === 1 ? 'player' : 'players'}` : '';
+    if (!top.length) {
+      const empty = document.createElement('li');
+      empty.className = 'saicf-game-lb-empty';
+      empty.textContent = 'No scores yet. Be the first!';
+      list.appendChild(empty);
+      return;
+    }
+    const below = you && you.rank > BOARD_ROWS;
+    top.slice(0, below ? BOARD_ROWS - 2 : BOARD_ROWS)
+      .forEach((r) => list.appendChild(boardRow(r.rank, r.name, r.score, r.you)));
+    if (below) {
+      const gap = document.createElement('li');
+      gap.className = 'saicf-game-lb-gap';
+      gap.textContent = '\u22EF';
+      list.appendChild(gap);
+      list.appendChild(boardRow(you.rank, you.name, you.score, true));
+    }
+    if (you && you.rank === 1 && bestEl) {
+      bestEl.textContent = 'You lead the board!';
+      bestEl.classList.add('is-new');
+    }
+  }
+
+  function showResult(stage, result) {
+    const thisRound = ++round;
+    const g = game;
+    const key = bestKey ? bestKey(g.id) : null;
+    const better = (a, b) => (g.order === 'asc' ? a < b : a > b);
+    const prevBest = key ? readBest(key) : null;
+    const counts = g.order !== 'desc' || result.score > 0;
+    const isNewBest = counts && (prevBest === null || better(result.score, prevBest));
+    if (key && isNewBest) writeBest(key, result.score);
+
+    playing = false;
+    paused = false;
+    g.destroy();
+    stage.innerHTML = '';
+    const box = document.createElement('div');
+    box.className = 'saicf-game-result';
+    box.innerHTML = `
+      <div class="saicf-game-result-head"></div>
+      <div class="saicf-game-result-score">
+        <span class="saicf-game-result-num"></span>
+        <span class="saicf-game-result-unit"></span>
+      </div>
+      <div class="saicf-game-result-best"></div>
+      <div class="saicf-game-lb">
+        <div class="saicf-game-lb-title"><span>Leaderboard</span><span class="saicf-game-lb-count"></span></div>
+        <ol class="saicf-game-lb-list"></ol>
+      </div>
+      <button class="saicf-game-again" type="button">Play again</button>
+    `;
+    box.querySelector('.saicf-game-result-head').textContent = result.headline || 'Round over';
+    box.querySelector('.saicf-game-result-num').textContent = String(result.score);
+    box.querySelector('.saicf-game-result-unit').textContent = g.unit || '';
+    const bestEl = box.querySelector('.saicf-game-result-best');
+    if (isNewBest && prevBest !== null) {
+      bestEl.textContent = 'New personal best!';
+      bestEl.classList.add('is-new');
+    } else if (prevBest !== null && !isNewBest) {
+      bestEl.textContent = `Your best: ${prevBest}`;
+    }
+    box.querySelector('.saicf-game-again').addEventListener('click', () => restartGame(stage));
+
+    const lb = box.querySelector('.saicf-game-lb');
+    if (!leaderboard) {
+      lb.remove();
+    } else {
+      const list = lb.querySelector('.saicf-game-lb-list');
+      for (let i = 0; i < BOARD_ROWS; i++) {
+        const li = document.createElement('li');
+        li.className = 'saicf-game-lb-row is-placeholder';
+        li.innerHTML = '<span class="saicf-game-lb-rank"></span><span class="saicf-game-lb-name"></span><span></span>';
+        list.appendChild(li);
+      }
+      // A round worth nothing is not submitted; the board is still shown.
+      const request = counts && result.score > 0
+        ? leaderboard.submit(g.id, result.score, Math.round(result.durationMs || 0))
+        : leaderboard.fetch(g.id);
+      Promise.resolve(request)
+        .then((board) => {
+          if (thisRound !== round) return;
+          if (!board) { lb.remove(); return; }
+          drawBoard(lb, board, bestEl);
+        })
+        .catch(() => { if (thisRound === round) lb.remove(); });
+    }
+    stage.appendChild(box);
+  }
+
+  function gameContext(stage) {
+    return {
+      restart: () => restartGame(stage),
+      gameOver: (result) => {
+        if (overlay && game) showResult(stage, result);
+      },
+    };
+  }
+
+  function restartGame(stage) {
+    if (!game) return;
+    round++;
+    game.destroy();
+    stage.innerHTML = '';
+    game.mount(stage, gameContext(stage));
+    playing = true;
+    paused = false;
+    syncPause();
+  }
 
   function clearOfferTimer() {
     if (offerTimer) {
@@ -378,6 +679,9 @@ export function createGameCenter({ mountTarget, offerDelayMs = DEFAULT_OFFER_DEL
   }
 
   function close() {
+    round++;
+    playing = false;
+    paused = false;
     if (onVisibility) {
       document.removeEventListener('visibilitychange', onVisibility);
       onVisibility = null;
@@ -430,10 +734,7 @@ export function createGameCenter({ mountTarget, offerDelayMs = DEFAULT_OFFER_DEL
     if (branding) overlay.querySelector('.saicf-game-foot').appendChild(branding.cloneNode(true));
 
     const stage = overlay.querySelector('.saicf-game-stage');
-    const restart = () => {
-      game.destroy();
-      game.mount(stage, { restart });
-    };
+    const restart = () => restartGame(stage);
 
     overlay.querySelector('.saicf-game-title').textContent = game.label;
     overlay.querySelector('.saicf-game-back').addEventListener('click', () => {
@@ -445,13 +746,11 @@ export function createGameCenter({ mountTarget, offerDelayMs = DEFAULT_OFFER_DEL
 
     mountTarget.appendChild(overlay);
     mountTarget.classList.add('saicf-game-mode');
-    game.mount(stage, { restart });
+    game.mount(stage, gameContext(stage));
+    playing = true;
+    paused = false;
 
-    onVisibility = () => {
-      if (!game) return;
-      if (document.hidden) game.pause?.();
-      else game.resume?.();
-    };
+    onVisibility = syncPause;
     document.addEventListener('visibilitychange', onVisibility);
   }
 
@@ -493,6 +792,12 @@ export function createGameCenter({ mountTarget, offerDelayMs = DEFAULT_OFFER_DEL
 
     isOpen() {
       return !!overlay;
+    },
+
+    // The chat window was minimised or opened again.
+    setWindowOpen(open) {
+      windowOpen = !!open;
+      syncPause();
     },
   };
 }

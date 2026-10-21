@@ -30,7 +30,10 @@ export function createMemoryGame() {
   let moves = 0;
   let matched = 0;
   let statusEl = null;
-  let restart = null;
+  let gameOver = null;
+  // Playing time of the round, without the time the game was paused.
+  let startedAt = 0;
+  let pausedAt = 0;
 
   function clearFlipTimer() {
     if (flipTimer) {
@@ -44,6 +47,7 @@ export function createMemoryGame() {
     if (busy || card.classList.contains('is-open') || card.classList.contains('is-matched')) return;
 
     card.classList.add('is-open');
+    if (!startedAt) startedAt = Date.now();
 
     if (!first) {
       first = card;
@@ -61,15 +65,8 @@ export function createMemoryGame() {
       if (matched === SYMBOLS.length) {
         statusEl.textContent = `Solved in ${moves} moves`;
         statusEl.classList.add('is-win');
-        // The restart icon in the bar is too quiet to read as "next round".
-        const again = document.createElement('button');
-        again.type = 'button';
-        again.className = 'saicf-game-again';
-        again.textContent = 'Play again';
-        again.addEventListener('click', () => restart?.());
-        // Below the board: the status now sits on top, and a button wedged
-        // between the score and the board reads as part of the score line.
-        root.appendChild(again);
+        // A beat to see the last pair land before the result screen.
+        flipTimer = setTimeout(finish, 600);
       } else {
         statusEl.textContent = `${moves} moves`;
       }
@@ -88,13 +85,22 @@ export function createMemoryGame() {
     }, FLIP_BACK_MS);
   }
 
+  function finish() {
+    flipTimer = null;
+    gameOver?.({ score: moves, durationMs: Date.now() - startedAt, headline: 'Solved!' });
+  }
+
   return {
     id: 'memory',
     label: 'Memory Game',
+    order: 'asc',
+    unit: 'moves',
 
     mount(el, ctx = {}) {
       root = el;
-      restart = ctx.restart || null;
+      gameOver = ctx.gameOver || null;
+      startedAt = 0;
+      pausedAt = 0;
       clearFlipTimer();
       first = null;
       busy = false;
@@ -136,9 +142,17 @@ export function createMemoryGame() {
     // player's peek at the second card.
     pause() {
       clearFlipTimer();
+      pausedAt = Date.now();
     },
 
     resume() {
+      if (pausedAt && startedAt) startedAt += Date.now() - pausedAt;
+      pausedAt = 0;
+      // Won just before the pause: the result screen is still due.
+      if (matched === SYMBOLS.length) {
+        finish();
+        return;
+      }
       if (busy) {
         root.querySelectorAll('.saicf-game-memory-card.is-open:not(.is-matched)')
           .forEach((c) => c.classList.remove('is-open'));
