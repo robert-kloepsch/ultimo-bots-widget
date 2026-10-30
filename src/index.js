@@ -3,11 +3,11 @@ import DOMPurify from 'dompurify';
 import { createGameCenter, gameStyles } from './games/index.js';
 
 // Bundled, version-pinned (package.json) — the Webflow Marketplace requires
-// the shipped artifact to be self-contained: no runtime CDN imports. Exposed
-// as globals because every call site guards on `typeof marked`/`typeof
-// DOMPurify` (and legacy host pages may consume them).
-globalThis.marked = marked;
-globalThis.DOMPurify = DOMPurify;
+// the shipped artifact to be self-contained: no runtime CDN imports. The
+// widget uses the imported bindings; the globals exist only for legacy host
+// pages that consume them, and are never set over a page's own copy.
+if (typeof globalThis.marked === 'undefined') globalThis.marked = marked;
+if (typeof globalThis.DOMPurify === 'undefined') globalThis.DOMPurify = DOMPurify;
 
 // Captured at eval time (only valid synchronously): on Webflow the hosted
 // <script> tag carries the bot id as a data-bot_id attribute
