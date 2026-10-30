@@ -214,8 +214,27 @@ function deriveDisclosureIconColor(themeColorHex) {
 
   let started = false;
 
+  // The Webflow App's reviewed release (widget.ultimo-bots.com/<version>/
+  // ultimo-widget.js, applied by the App) owns a page it is on: this embed
+  // then stays idle, so the two never run side by side (Webflow Marketplace:
+  // legacy and replacement runtimes must not execute together). Measured
+  // 30.10.2026: the Webflow sites that kept an old pasted embed next to the
+  // App's script named the same agent in both. Decided once the page is
+  // parsed, when every tag it carries is in the DOM.
+  const HOSTED_RELEASE = /^https:\/\/widget\.ultimo-bots\.com\/\d+\.\d+\.\d+\/ultimo-widget\.js(?:[?#]|$)/;
+  function hostedReleaseOnPage() {
+    return Array.from(document.getElementsByTagName('script'))
+      .some((s) => HOSTED_RELEASE.test(s.src || ''));
+  }
+
   function startIfReady() {
     if (started) return true;
+    if (document.readyState === 'loading') return false;
+    if (hostedReleaseOnPage()) {
+      started = true;
+      console.info('Ultimo Bots: the hosted widget on this page takes over; this embed stays idle.');
+      return true;
+    }
     let container = document.getElementById('chat-widget-container');
     // Webflow hosted-script path: no pre-created container — build it from
     // the bot id found on our own <script> tag.
