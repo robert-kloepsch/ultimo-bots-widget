@@ -166,7 +166,7 @@ const STALL_BODY_SCRIPT = `
   })();
 `;
 
-async function withPage(fn, { stallConfig = false, stallBody = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null, answer = null, config = null } = {}) {
+async function withPage(fn, { stallConfig = false, stallBody = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null, answer = null, config = null, tamperFonts = false } = {}) {
   const browser = await chromium.launch();
   const context = await browser.newContext(mobile
     ? { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
@@ -210,8 +210,15 @@ async function withPage(fn, { stallConfig = false, stallBody = false, failConfig
     const file = path.join(__dirname, '..', '..', 'ultimo-bots-cdn', 'fonts', ...rel.split('/'));
     if (!fs.existsSync(file)) return route.fulfill({ status: 404, body: 'missing' });
     const type = file.endsWith('.css') ? 'text/css' : 'font/woff2';
-    return route.fulfill({ status: 200, contentType: type, headers: { 'Access-Control-Allow-Origin': '*' }, body: fs.readFileSync(file) });
+    // tamperFonts: the stylesheet differs from what the widget pinned.
+    const body = tamperFonts && type === 'text/css'
+      ? Buffer.concat([fs.readFileSync(file), Buffer.from('/* changed */')]) : fs.readFileSync(file);
+    return route.fulfill({ status: 200, contentType: type, headers: { 'Access-Control-Allow-Origin': '*' }, body });
   });
+  // Image hosts for the remote-image test: answered, so every fetch is counted.
+  const PIXEL = Buffer.from('R0lGODlhAQABAAAAACw=', 'base64');
+  await page.route(/^https:\/\/(evil\.example|scfimages\.blob\.core\.windows\.net)\//, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/gif', body: PIXEL }));
   await page.route(HOSTED_URL, js(fs.readFileSync(ARTIFACT)));
   if (html) await page.route(LEGACY_URL, js(legacyBundle()));
 
@@ -997,7 +1004,7 @@ async function testFontsSelfHosted() {
     // Browsers fetch a face only when text needs it: ask for it as the chat
     // text would, then it must be loaded from our origin.
     const usable = await page.evaluate(async () => {
-      const faces = await document.fonts.load('16px "Open Sans"', 'Hello, how can I help?');
+      const faces = await document.fonts.load('16px "Ultimo Open Sans"', 'Hello, how can I help?');
       return faces.length > 0 && faces.every((f) => f.status === 'loaded');
     });
     const google = allRequests.filter((u) => /fonts\.(googleapis|gstatic)\.com/.test(u));
@@ -1005,7 +1012,75 @@ async function testFontsSelfHosted() {
     record('fonts: Open Sans from widget.ultimo-bots.com/fonts/1 and usable, no request to Google',
       google.length === 0 && ours.some((u) => u.endsWith('.css')) && ours.some((u) => u.endsWith('.woff2')) && usable,
       `google=${google.length} ours=${ours.length} usable=${usable}`);
+    // The face goes onto the page under our own name (the page's own text
+    // never changes), and the stylesheet is pinned by its hash.
+    const added = await page.evaluate(() => {
+      const families = new Set();
+      document.fonts.forEach((f) => families.add(f.family.replace(/["']/g, '')));
+      const link = document.querySelector('link[data-ultimo-font]');
+      const host = document.getElementById('ultimo-bots-container-TESTBOT');
+      return {
+        families: Array.from(families),
+        integrity: link ? link.integrity : null,
+        crossOrigin: link ? link.crossOrigin : null,
+        stack: host ? host.style.getPropertyValue('--saicf-font-family') : null,
+      };
+    });
+    record('fonts: added as "Ultimo Open Sans" (no face named like a page font), stylesheet SRI-pinned with CORS',
+      !added.families.includes('Open Sans') && added.families.includes('Ultimo Open Sans')
+        && /^sha384-/.test(added.integrity || '') && added.crossOrigin === 'anonymous'
+        && (added.stack || '').startsWith("'Ultimo Open Sans', "),
+      JSON.stringify(added));
   }, { config: { font_family: "'Open Sans', sans-serif" } });
+}
+
+// A stylesheet that is not the pinned one is refused; the widget still works
+// in the fallback font.
+async function testFontsTamperedRefused() {
+  await withPage(async ({ page, base }) => {
+    await page.goto(base);
+    await mounted(page);
+    await page.waitForTimeout(1500);
+    const r = await page.evaluate(async () => {
+      await document.fonts.load('16px "Ultimo Open Sans"', 'Hello').catch(() => []);
+      const families = new Set();
+      document.fonts.forEach((f) => families.add(f.family.replace(/["']/g, '')));
+      return { families: Array.from(families), mounted: !!document.getElementById('ultimo-bots-container-TESTBOT') };
+    });
+    record('fonts: a stylesheet that differs from the pinned hash is not applied, the widget still mounts',
+      !r.families.includes('Ultimo Open Sans') && r.mounted, JSON.stringify(r));
+  }, { config: { font_family: "'Open Sans', sans-serif" }, tamperFonts: true });
+}
+
+// -- Rendered text never fetches a third-party resource on its own --------
+async function testRemoteImagesNotFetched() {
+  const answer = 'Look ![tracking pixel](https://evil.example/md.png) and <img src="https://evil.example/raw.png" alt="raw">'
+    + ' <video src="https://evil.example/v.mp4" autoplay></video><table background="https://evil.example/bg.png"><tr><td>t</td></tr></table>'
+    + ' ![our image](https://scfimages.blob.core.windows.net/images/ok.png)';
+  await withPage(async ({ page, base, allRequests }) => {
+    await page.goto(base);
+    await mounted(page);
+    await openChat(page);
+    await page.waitForTimeout(1200);
+    await sendUserMessage(page, 'show me');
+    await page.waitForTimeout(3500);
+    const found = await page.evaluate(() => {
+      const sr = document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot;
+      const rows = Array.from(sr.querySelectorAll('.saicf-message-row'));
+      const last = rows[rows.length - 1];
+      if (!last) return null;
+      return {
+        mdLink: !!last.querySelector('a[href="https://evil.example/md.png"]'),
+        evilImgWithSrc: last.querySelectorAll('img[src*="evil.example"]').length,
+        video: last.querySelectorAll('video').length,
+        ownImg: last.querySelectorAll('img[src^="https://scfimages.blob.core.windows.net/"]').length,
+      };
+    });
+    const evil = allRequests.filter((u) => u.includes('evil.example'));
+    record('remote images: nothing fetched from a third party (markdown image becomes a link), our own image shows',
+      !!found && evil.length === 0 && found.mdLink && found.evilImgWithSrc === 0 && found.video === 0 && found.ownImg === 1,
+      `evil requests=${evil.length} ${JSON.stringify(found)}`);
+  }, { answer });
 }
 
 // ── Run ───────────────────────────────────────────────────────────────────
@@ -1036,6 +1111,8 @@ async function testFontsSelfHosted() {
     testRequestsNameTheBot,
     testSanitizerProfile,
     testFontsSelfHosted,
+    testFontsTamperedRefused,
+    testRemoteImagesNotFetched,
   ];
   for (const t of suite) {
     try {

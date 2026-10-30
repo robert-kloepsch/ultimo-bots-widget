@@ -29,48 +29,111 @@ const OWN_SCRIPT_BOT_ID = (() => {
 
 // Served from our own origin (widget.ultimo-bots.com/fonts/1/, built from the
 // OFL-licensed Fontsource packages, see the CDN README): a visitor's browser
-// never contacts Google for a widget font (Robert, 30.10.2026).
+// never contacts Google for a widget font (Robert, 30.10.2026). Each
+// stylesheet is pinned by its hash, and declares the font under its own
+// 'Ultimo <Family>' name: the @font-face added to the page never changes how
+// the page's own text renders.
 const FONT_SOURCES = {
-  'inter, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/inter.css',
-  'roboto, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/roboto.css',
-  'open sans, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/open-sans.css',
-  'poppins, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/poppins.css',
-  'montserrat, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/montserrat.css',
-  'lato, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/lato.css',
-  'nunito, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/nunito.css',
-  'source sans 3, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/source-sans-3.css',
-  'playfair display, serif':
-    'https://widget.ultimo-bots.com/fonts/1/playfair-display.css',
-  'manrope, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/manrope.css',
-  'raleway, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/raleway.css',
-  'dm sans, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/dm-sans.css',
-  'work sans, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/work-sans.css',
-  'karla, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/karla.css',
-  'nunito sans, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/nunito-sans.css',
-  'pt sans, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/pt-sans.css',
-  'oswald, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/oswald.css',
-  'space grotesk, sans-serif':
-    'https://widget.ultimo-bots.com/fonts/1/space-grotesk.css',
-  'merriweather, serif':
-    'https://widget.ultimo-bots.com/fonts/1/merriweather.css',
-  'libre baskerville, serif':
-    'https://widget.ultimo-bots.com/fonts/1/libre-baskerville.css',
+  'inter, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/inter.css',
+    integrity: 'sha384-mWFAQ/IMGrUbwAHUZrHeBnz2cK4ZUXcXo1/H4nqSyzf2Y4A+ebvdHmR3kqkTR8vV',
+    family: 'Ultimo Inter',
+  },
+  'roboto, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/roboto.css',
+    integrity: 'sha384-wDHiL1NQHv6IpyAuw/p5dvM5+s9ONJ7uSe4AaWDCT4w8OkB3xrXNVnwIFAMp7Pyz',
+    family: 'Ultimo Roboto',
+  },
+  'open sans, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/open-sans.css',
+    integrity: 'sha384-hBUAsk2URLLCiTZpxAm2PoPywhBano5aOLuzP5Tz9ASCZkx66uav8m2qbB3hEUOM',
+    family: 'Ultimo Open Sans',
+  },
+  'poppins, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/poppins.css',
+    integrity: 'sha384-wll2H2pc0xGfJypYsyIST8y0hoQbL2wK0+So5PYUoo9OnfEuutCj75rZd9YRYxMB',
+    family: 'Ultimo Poppins',
+  },
+  'montserrat, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/montserrat.css',
+    integrity: 'sha384-SnBQCpDLRvup8reyGkOP5hsJHYmbdSVCdNm9ou1v2y9o/UONV/DtjWUAnE+EWLkv',
+    family: 'Ultimo Montserrat',
+  },
+  'lato, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/lato.css',
+    integrity: 'sha384-ae4OCFpDIU6CKw2aayFQV+BEF3xj26eLtEm6fJFyw0Vu+aJ09cfOnPT5oMwmKChz',
+    family: 'Ultimo Lato',
+  },
+  'nunito, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/nunito.css',
+    integrity: 'sha384-9rnm1yTgTZSdwbhP0Y28xUtWTzPo7m2b15RHhHc5wz4BmrJ7WQOAOfX2BRtYc/s+',
+    family: 'Ultimo Nunito',
+  },
+  'source sans 3, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/source-sans-3.css',
+    integrity: 'sha384-ns6a7mA9bIX1DrM6psaGyQmNvzw/O+x7cfPSK4T2PzWiCv4Kpqiw2cTehCfiH8qN',
+    family: 'Ultimo Source Sans 3',
+  },
+  'playfair display, serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/playfair-display.css',
+    integrity: 'sha384-ha/JmviWxLXDmNBazVx4Tvayqnkv1ojO0SNgnJDqcbaQXIqfMvu0Mk2cvNE0ZF1U',
+    family: 'Ultimo Playfair Display',
+  },
+  'manrope, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/manrope.css',
+    integrity: 'sha384-xEm9vw8F6d5I+evO6SDoHvChwDBwVSQ+DPThGJrnXWPDMQ+9xw4SVHz8QAMzRhWv',
+    family: 'Ultimo Manrope',
+  },
+  'raleway, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/raleway.css',
+    integrity: 'sha384-N4vSHPixoI25cTff0O0gWZEwyrC9GPkK3QgIWbFrVqGfMxjWF6e2Vi2aPfMLe0Q1',
+    family: 'Ultimo Raleway',
+  },
+  'dm sans, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/dm-sans.css',
+    integrity: 'sha384-29sVPJzxmb0EHq/bp1VRK+QBkX7CBkKNN/xPfRKzqL0d0QmFrgt9fWA9i3nyiZA0',
+    family: 'Ultimo DM Sans',
+  },
+  'work sans, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/work-sans.css',
+    integrity: 'sha384-4ewuH6O0q9YACTKYstzxUFayk2uirYd2duc3Zg3d98vl9tlC1jyXoQNFVQSrlBUU',
+    family: 'Ultimo Work Sans',
+  },
+  'karla, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/karla.css',
+    integrity: 'sha384-J0EUa3oXPHykIheC7JeA+n8qY5LRkyWmkmUlMNcvZ+tYe5SrbpzaGLPMY/oRaj4o',
+    family: 'Ultimo Karla',
+  },
+  'nunito sans, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/nunito-sans.css',
+    integrity: 'sha384-4UI/UT4aWhXMfj3tuxhbhmzevdUMX/qbU+yE+3eZz/kiAlVYlzlF5cShm58nWIue',
+    family: 'Ultimo Nunito Sans',
+  },
+  'pt sans, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/pt-sans.css',
+    integrity: 'sha384-216EfbxxNw7tRwQ1Ycpo4cWtIxk67mkxhM8N2mbRz1LTGjsMCpPpEdF3flOxPbtN',
+    family: 'Ultimo PT Sans',
+  },
+  'oswald, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/oswald.css',
+    integrity: 'sha384-ANcsDc5mj3wYeH2yBn9eyyAKctdjheDMJHCHea+zD4qzwe8hm40Ntu1/O2Djwafa',
+    family: 'Ultimo Oswald',
+  },
+  'space grotesk, sans-serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/space-grotesk.css',
+    integrity: 'sha384-7mO+QFfIsOAvHUXPRX10CubdYajyug+BO69KEyneqEfO4CoCtztLiQ60h/Vj/rGs',
+    family: 'Ultimo Space Grotesk',
+  },
+  'merriweather, serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/merriweather.css',
+    integrity: 'sha384-YVB2nczYT2Djx7PrXvWr51iKSuojUz2BYaRoEvtszB+jb94t8euMsQMaHUA9ktIo',
+    family: 'Ultimo Merriweather',
+  },
+  'libre baskerville, serif': {
+    href: 'https://widget.ultimo-bots.com/fonts/1/libre-baskerville.css',
+    integrity: 'sha384-W6ypRgPJ9FhI9AY+8TiUKYdtjCDKcwnD5ZAPFWpPnVmuINFgtKzg8wgqnE1+Rn7o',
+    family: 'Ultimo Libre Baskerville',
+  },
 };
 
 function normalizeFontKey(fontFamily = '') {
@@ -107,19 +170,45 @@ function safeHttpUrl(value, { allowDataImage = false } = {}) {
   } catch { return null; }
 }
 
+// Images the widget renders inside message text: our own hosts (agent
+// uploads, presets) and the page's own origin only.
+const IMAGE_HOSTS = ['portal.ultimo-bots.com', 'widget.ultimo-bots.com', 'scfimages.blob.core.windows.net'];
+function imageAllowed(value) {
+  const v = String(value ?? '').trim();
+  if (!v || /["'<>\\]/.test(v)) return false;
+  if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(v)) return true;
+  try {
+    const u = new URL(v, window.location.href);
+    return u.protocol === 'https:' && (IMAGE_HOSTS.includes(u.hostname) || u.origin === window.location.origin);
+  } catch { return false; }
+}
+// The sanitizer is shared by every widget instance on the page: one hook.
+let _imageHookAdded = false;
+
 function ensureFontLoaded(fontFamily) {
   if (!fontFamily) return;
   const key = normalizeFontKey(fontFamily);
-  const href = FONT_SOURCES[key];
-  if (!href) return;
+  const source = FONT_SOURCES[key];
+  if (!source) return;
   if (document.querySelector(`link[data-ultimo-font="${key}"]`)) return null;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
+  link.integrity = source.integrity;
+  link.crossOrigin = 'anonymous';
+  const href = safeHttpUrl(source.href);
+  if (!href) return null;
   link.href = href;
   link.setAttribute('data-ultimo-font', key);
   document.head.appendChild(link);
   // Returned so the instance that added it can remove it on teardown.
   return link;
+}
+
+// The configured stack with our own family name in front: the widget renders
+// in the self-hosted face, the rest of the stack stays as the fallback.
+function widgetFontStack(fontFamily) {
+  const source = FONT_SOURCES[normalizeFontKey(fontFamily)];
+  return source ? `'${source.family}', ${fontFamily}` : fontFamily;
 }
 
 // ── Colour helpers ────────────────────────────────────────────────────
@@ -370,6 +459,23 @@ async function initializeChatWidget(hostContainer) {
             const titleAttr = title ? ` title="${escapeHtmlStatic(title)}"` : '';
             const rel = _linkTarget === '_blank' ? ' rel="noopener noreferrer"' : '';
             return `<a href="${escapeHtmlStatic(safeHref)}" target="${_linkTarget}"${rel}${titleAttr}>${escapeHtmlStatic(displayText)}</a>`;
+          },
+          image(...args) {
+            let href, title, text;
+            if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+              ({ href, title, text } = args[0]);
+            } else {
+              [href, title, text] = args;
+            }
+            const alt = text || title || 'Image';
+            if (imageAllowed(href)) {
+              return `<img src="${escapeHtmlStatic(href)}" alt="${escapeHtmlStatic(alt)}">`;
+            }
+            // An image from anywhere else is offered as a link: nothing is
+            // fetched until the visitor chooses to open it.
+            const safeHref = safeHttpUrl(href);
+            if (!safeHref) return escapeHtmlStatic(alt);
+            return `<a href="${escapeHtmlStatic(safeHref)}" target="_blank" rel="noopener noreferrer">${escapeHtmlStatic(alt)}</a>`;
           }
         }
       });
@@ -389,12 +495,26 @@ async function initializeChatWidget(hostContainer) {
   // agent and configuration text): links and basic formatting only. No
   // inline styles or <style> (a full-screen overlay), no forms or inputs (a
   // fake login), no frames, SVG or MathML (audit 30.10.2026).
+  // Nothing in rendered text makes the visitor's browser fetch a resource on
+  // its own from a third party (model output can name any URL): images only
+  // from our hosts or the page's own origin, no audio/video, no background or
+  // poster attributes.
   const PURIFY_PROFILE = {
     ADD_ATTR: ['target', 'rel'],
     FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'option', 'iframe', 'frame',
-      'object', 'embed', 'svg', 'math', 'link', 'meta', 'base', 'template'],
-    FORBID_ATTR: ['style', 'srcset', 'formaction', 'action'],
+      'object', 'embed', 'svg', 'math', 'link', 'meta', 'base', 'template',
+      'audio', 'video', 'source', 'track', 'picture'],
+    FORBID_ATTR: ['style', 'srcset', 'formaction', 'action', 'background', 'poster', 'ping'],
   };
+  if (!_imageHookAdded) {
+    _imageHookAdded = true;
+    DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+      if (node.nodeName === 'IMG' && !imageAllowed(node.getAttribute('src'))) {
+        node.removeAttribute('src');
+        node.setAttribute('hidden', '');
+      }
+    });
+  }
   // Helper: markdown-parse + sanitise.
   function sanitizedMarkdown(text) {
     const html = (typeof marked !== 'undefined') ? marked.parse(text) : String(text || '');
@@ -2749,7 +2869,7 @@ async function initializeChatWidget(hostContainer) {
   })();
 
   { const fontLink = ensureFontLoaded(fontFamily); if (fontLink) _hostHeadNodes.push(fontLink); }
-  shadowRoot.host.style.setProperty('--saicf-font-family', fontFamily);
+  shadowRoot.host.style.setProperty('--saicf-font-family', widgetFontStack(fontFamily));
 
   let isPulsing = false;
   if (typeof widgetConfig.pulsing === 'boolean') {
@@ -3026,7 +3146,8 @@ async function initializeChatWidget(hostContainer) {
     const msgEl = document.createElement('button');
     msgEl.type = 'button';
     msgEl.className = 'saicf-pop-up-message';
-    msgEl.setAttribute('aria-label', 'Open chat');
+    // The name starts with the visible text (WCAG 2.5.3 Label in Name).
+    msgEl.setAttribute('aria-label', `${String(msg).replace(/\s+/g, ' ').trim()}. Open chat`);
     msgEl.style.font = 'inherit';
     msgEl.style.textAlign = 'left';
     msgEl.style.border = '0';
@@ -5247,7 +5368,6 @@ function toggleMenu(open) {
     const msgEl = document.createElement('button');
     msgEl.type = 'button';
     msgEl.className = 'saicf-pop-up-message saicf-agent-pop-up';
-    msgEl.setAttribute('aria-label', 'Open chat to read the agent message');
     msgEl.style.font = 'inherit';
     msgEl.style.textAlign = 'left';
     msgEl.style.border = '0';
@@ -5260,6 +5380,7 @@ function toggleMenu(open) {
       : content;
     // Use textContent to avoid injecting raw HTML from agent input.
     msgEl.textContent = preview;
+    msgEl.setAttribute('aria-label', `${preview.replace(/\s+/g, ' ').trim()}. Open chat to read the agent message`);
     msgEl.addEventListener('click', () => {
       // Delegate to the existing icon click handler, which loads history,
       // opens the chat, and clears the unread state.
