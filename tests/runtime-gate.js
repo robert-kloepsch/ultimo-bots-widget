@@ -142,13 +142,38 @@ const CENSUS_SCRIPT = `
   })();
 `;
 
-async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null, answer = null, config = null } = {}) {
+// Headers and the first bytes of the configuration arrive at once, then the
+// body never finishes; the stream ends only when the request is aborted.
+const STALL_BODY_SCRIPT = `
+  (() => {
+    const real = window.fetch;
+    const s = window.__STALL__ = { headersAt: 0, abortedAt: 0 };
+    window.fetch = function (url, opts = {}) {
+      if (!String(url).includes('/api/widget_configuration/')) return real.apply(this, arguments);
+      const signal = opts.signal;
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"theme_color": "#5e1bff", "header_text": '));
+          if (signal) signal.addEventListener('abort', () => {
+            s.abortedAt = Date.now();
+            controller.error(new DOMException('aborted', 'AbortError'));
+          });
+        },
+      });
+      s.headersAt = Date.now();
+      return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    };
+  })();
+`;
+
+async function withPage(fn, { stallConfig = false, stallBody = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null, answer = null, config = null } = {}) {
   const browser = await chromium.launch();
   const context = await browser.newContext(mobile
     ? { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
     : {});
   const page = await context.newPage();
   if (census) await page.addInitScript(CENSUS_SCRIPT);
+  if (stallBody) await page.addInitScript(STALL_BODY_SCRIPT);
 
   const apiRequests = [];
   const sockets = [];   // every WS the page opens, counted where it is routed:
@@ -444,21 +469,36 @@ async function testFailedInitRecovers() {
   }, { failConfig: true });
 }
 
-// ── 4. Headers-then-stalled body must not hang init ───────────────────────
+// ── 4. A configuration request that never answers must not hang init ─────
 async function testBodyStall() {
   await withPage(async ({ page, base }) => {
     const t0 = Date.now();
     await page.goto(base);
-    // fetchWithTimeout's default deadline is 10s; give it room and check the
-    // page never ends up with a half-registered instance.
+    // The configuration deadline is 12 s; give it room and check the page
+    // never ends up with a half-registered instance.
     await page.waitForTimeout(17000);
     const registry = await page.evaluate(() => Object.entries(window.__ULTIMO_BOTS__?.instances || {})
       .map(([k, v]) => [k, v.status]));
     const responsive = await page.evaluate(() => document.title);
-    record('body stall: deadline fires, nothing left half-mounted',
+    record('no response: deadline fires, nothing left half-mounted',
       registry.length === 0 && responsive === 'widget host',
       `after ${Math.round((Date.now() - t0) / 1000)}s registry=${JSON.stringify(registry)}`);
   }, { stallConfig: true });
+}
+
+// ── 4b. Headers arrive, then the body stalls: the deadline covers the body ─
+async function testRealBodyStall() {
+  await withPage(async ({ page, base }) => {
+    await page.goto(base);
+    await page.waitForTimeout(16000);
+    const s = await page.evaluate(() => window.__STALL__);
+    const registry = await page.evaluate(() => Object.entries(window.__ULTIMO_BOTS__?.instances || {})
+      .map(([k, v]) => [k, v.status]));
+    const after = s && s.headersAt && s.abortedAt ? (s.abortedAt - s.headersAt) / 1000 : null;
+    record('body stall: headers arrive, the body never ends; the 12 s deadline aborts it, nothing left half-mounted',
+      after !== null && after >= 11 && after <= 14 && registry.length === 0,
+      `body aborted ${after === null ? 'never' : `${after.toFixed(1)} s after the headers`} | registry=${JSON.stringify(registry)}`);
+  }, { stallBody: true });
 }
 
 // ── 5. A javascript: product URL must never become navigable ──────────────
@@ -977,6 +1017,7 @@ async function testFontsSelfHosted() {
     testDestroyAbortsInflight,
     testFailedInitRecovers,
     testBodyStall,
+    testRealBodyStall,
     testProductUrlNeutralised,
     testAgentPopupKeyboard,
     testTeardownCensus,
