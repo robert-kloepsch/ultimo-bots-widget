@@ -133,7 +133,7 @@ const CENSUS_SCRIPT = `
   })();
 `;
 
-async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false } = {}) {
+async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false } = {}) {
   const browser = await chromium.launch();
   const context = await browser.newContext(mobile
     ? { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
@@ -146,10 +146,19 @@ async function withPage(fn, { stallConfig = false, failConfig = false, census = 
                         // page.on('websocket') does not fire for routed sockets.
   await page.routeWebSocket(`wss://portal.ultimo-bots.com/api/ws`, (ws) => {
     sockets.push(ws);
+    ws.closedByPage = false;
+    ws.openedAt = Date.now();
+    // With an onClose handler Playwright stops forwarding the closure, so the
+    // handler completes it (otherwise the page never sees 'close').
+    ws.onClose((code, reason) => {
+      ws.closedByPage = true;
+      ws.closedAt = Date.now();
+      ws.close({ code, reason }).catch(() => {});
+    });
     ws.onMessage((raw) => {
       let msg = {};
       try { msg = JSON.parse(raw); } catch { /* ignore */ }
-      if (msg.type === 'widget_init') {
+      if (msg.type === 'widget_init' && !silentWs) {
         ws.send(JSON.stringify({ type: 'widget_init_ack', session_status: 'active' }));
       }
     });
@@ -602,6 +611,26 @@ async function testGameTeardownCensus() {
   }, { census: true });
 }
 
+// ── 7d. WebSocket handshake deadline (1.3.2) ──────────────────────────────
+// Audit 30.10.2026: a socket whose widget_init is never acknowledged must not
+// hang forever. The widget closes it after 15 s and reconnects with backoff.
+async function testWsHandshakeDeadline() {
+  await withPage(async ({ page, base, sockets }) => {
+    await page.goto(base);
+    await mounted(page);
+    await openChat(page);
+    await page.waitForTimeout(1500);
+    await sendUserMessage(page, 'hello');
+    await page.waitForTimeout(3000);
+    const first = sockets[0];
+    await page.waitForTimeout(20000);
+    const lived = first && first.closedAt ? first.closedAt - first.openedAt : null;
+    record('ws handshake: an unacknowledged socket is closed after ~15 s and reconnects',
+      lived !== null && lived >= 13000 && lived <= 17500 && sockets.length >= 2,
+      `sockets=${sockets.length} first socket closed by the page after ${lived === null ? 'never' : `${(lived / 1000).toFixed(1)} s`}`);
+  }, { silentWs: true });
+}
+
 // ── 7c. Blocked storage (1.3.2) ───────────────────────────────────────────
 // #1176883 F1: with site data blocked, reading sessionStorage throws a
 // SecurityError. The widget must mount and answer anyway.
@@ -699,6 +728,7 @@ async function testMobileHostIsolation() {
     testTeardownCensus,
     testGameTeardownCensus,
     testBlockedStorageMounts,
+    testWsHandshakeDeadline,
     testMobileHostIsolation,
     testReinjectedRuntime,
     testInjectedOnlyResolvesFromPageTag,

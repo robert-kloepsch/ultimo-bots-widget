@@ -212,6 +212,10 @@ if (!/destroy\(\) \{\s*\n\s*if \(destroyed\) return;/.test(src)) {
 if (!/initializeChatWidget\(container\)\)\s*\n\s*\.catch\(\(err\) => \{[\s\S]{0,200}registry\.destroy\(botId\)/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'mount registry', why: 'a failed initialization is not rolled back' });
 }
+// 1.3.2 (audit 30.10.2026): the WebSocket handshake has a deadline too.
+if (!/new WebSocket\([^)]*\);[\s\S]{0,400}ownSetTimeout\(\(\) => \{[\s\S]{0,160}\.close\(\)[\s\S]{0,80}WS_HANDSHAKE_MS\)/.test(src)) {
+  violations.push({ cls: 'E', line: 0, text: 'new WebSocket', why: 'the WebSocket handshake has no deadline' });
+}
 // 1.3.2 (#1173952 F2): the waiting-room games end with the instance.
 if (!/registerCleanup\(\(\) => gameCenter\.teardown\(\)\)/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'gameCenter', why: 'the game center is not torn down with the instance' });

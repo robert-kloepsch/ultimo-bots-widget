@@ -3931,6 +3931,10 @@ function toggleMenu(open) {
   });
   let wsConnected = false;
   let wsConnecting = false;
+  // A socket that has not acknowledged widget_init by then is closed and
+  // takes the normal backoff path (Webflow audit 30.10.2026: no network call
+  // without a deadline, the handshake included).
+  const WS_HANDSHAKE_MS = 15000;
   let wsReconnectDelay = 1000;
   let wsReconnectTimer = null;
   registerCleanup(() => {
@@ -3968,6 +3972,12 @@ function toggleMenu(open) {
       scheduleWsReconnect();
       return;
     }
+    const pendingWs = liveWs;
+    ownSetTimeout(() => {
+      if (liveWs === pendingWs && !wsAuthenticated) {
+        try { pendingWs.close(); } catch { /* already closing */ }
+      }
+    }, WS_HANDSHAKE_MS);
 
     liveWs.addEventListener('open', () => {
       wsConnecting = false;
