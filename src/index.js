@@ -5170,7 +5170,12 @@ function toggleMenu(open) {
     }
   }
 
-  if (popUpMessages) {
+  // The timed welcome teaser is compiled out of the hosted Webflow release
+  // (__ULTIMO_AUTO_TEASER__ false in webpack.release.js; Robert, 30.10.2026):
+  // Webflow guideline "User interaction 1" allows no pop-up on load or on a
+  // timer. The dev build keeps it. Agent-message pop-ups are unaffected.
+  /* global __ULTIMO_AUTO_TEASER__ */
+  if (__ULTIMO_AUTO_TEASER__ && popUpMessages) {
     const popUpTimer = ownSetTimeout(showPopUpSequentially, popUpDelaySeconds * 1000);
     registerCleanup(() => clearTimeout(popUpTimer));
   }

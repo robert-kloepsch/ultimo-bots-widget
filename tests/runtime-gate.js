@@ -631,6 +631,27 @@ async function testWsHandshakeDeadline() {
   }, { silentWs: true });
 }
 
+// ── 7e. No timed teaser (1.3.2) ───────────────────────────────────────────
+// Guideline "User interaction 1": no pop-up on load or on a timer. The mocked
+// config asks for a teaser after 0 s; the hosted release shows none.
+async function testNoTimedTeaser() {
+  await withPage(async ({ page, base }) => {
+    await page.goto(base);
+    await mounted(page);
+    await page.waitForTimeout(4000);
+    const shown = await page.evaluate(() => {
+      const sr = document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot;
+      const c = sr.querySelector('.saicf-pop-up-container');
+      return {
+        visibleMessages: sr.querySelectorAll('.saicf-pop-up-message.show').length,
+        containerHidden: !c || c.classList.contains('hidden'),
+      };
+    });
+    record('no timed teaser: nothing pops up on load or after a delay',
+      shown.visibleMessages === 0 && shown.containerHidden, JSON.stringify(shown));
+  });
+}
+
 // ── 7c. Blocked storage (1.3.2) ───────────────────────────────────────────
 // #1176883 F1: with site data blocked, reading sessionStorage throws a
 // SecurityError. The widget must mount and answer anyway.
@@ -729,6 +750,7 @@ async function testMobileHostIsolation() {
     testGameTeardownCensus,
     testBlockedStorageMounts,
     testWsHandshakeDeadline,
+    testNoTimedTeaser,
     testMobileHostIsolation,
     testReinjectedRuntime,
     testInjectedOnlyResolvesFromPageTag,

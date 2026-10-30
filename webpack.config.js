@@ -33,7 +33,7 @@ module.exports = {
   plugins: [
     // Shopify add-to-cart stays enabled in the legacy bundle.js build; the
     // hosted Webflow artifact (webpack.release.js) compiles it out.
-    new webpack.DefinePlugin({ __ULTIMO_COMMERCE__: JSON.stringify(true) }),
+    new webpack.DefinePlugin({ __ULTIMO_COMMERCE__: JSON.stringify(true), __ULTIMO_AUTO_TEASER__: JSON.stringify(true) }),
     // 1. Generate dist/index.html from src/index.html (optional)
     new HtmlWebpackPlugin({
       template: './src/index.html',

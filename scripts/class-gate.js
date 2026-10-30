@@ -212,6 +212,12 @@ if (!/destroy\(\) \{\s*\n\s*if \(destroyed\) return;/.test(src)) {
 if (!/initializeChatWidget\(container\)\)\s*\n\s*\.catch\(\(err\) => \{[\s\S]{0,200}registry\.destroy\(botId\)/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'mount registry', why: 'a failed initialization is not rolled back' });
 }
+// 1.3.2 (Robert, 30.10.2026): the timed welcome teaser only exists behind
+// __ULTIMO_AUTO_TEASER__, which the hosted release compiles out
+// (guideline "User interaction 1": no pop-up on load or on a timer).
+if (!/if \(__ULTIMO_AUTO_TEASER__ && popUpMessages\)/.test(src)) {
+  violations.push({ cls: 'C', line: 0, text: 'popUpTimer', why: 'the timed teaser is not behind __ULTIMO_AUTO_TEASER__' });
+}
 // 1.3.2 (audit 30.10.2026): the WebSocket handshake has a deadline too.
 if (!/new WebSocket\([^)]*\);[\s\S]{0,400}ownSetTimeout\(\(\) => \{[\s\S]{0,160}\.close\(\)[\s\S]{0,80}WS_HANDSHAKE_MS\)/.test(src)) {
   violations.push({ cls: 'E', line: 0, text: 'new WebSocket', why: 'the WebSocket handshake has no deadline' });

@@ -31,7 +31,9 @@ module.exports = {
     // `false` compiles the add-to-cart / theme-cart-sync chain out entirely
     // (verify: the artifact contains no "cart/add.js", "CartCount" or
     // "shopify:cart" strings). The default dev build keeps it enabled.
-    new webpack.DefinePlugin({ __ULTIMO_COMMERCE__: JSON.stringify(false) }),
+    // `__ULTIMO_AUTO_TEASER__: false` compiles the timed welcome teaser out
+    // (Webflow guideline "User interaction 1": no pop-up on load or on a timer).
+    new webpack.DefinePlugin({ __ULTIMO_COMMERCE__: JSON.stringify(false), __ULTIMO_AUTO_TEASER__: JSON.stringify(false) }),
   ],
   module: {
     rules: [
