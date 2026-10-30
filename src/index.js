@@ -27,47 +27,50 @@ const OWN_SCRIPT_BOT_ID = (() => {
   return tags.length === 1 ? read(tags[0]) : null;
 })();
 
+// Served from our own origin (widget.ultimo-bots.com/fonts/1/, built from the
+// OFL-licensed Fontsource packages, see the CDN README): a visitor's browser
+// never contacts Google for a widget font (Robert, 30.10.2026).
 const FONT_SOURCES = {
   'inter, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/inter.css',
   'roboto, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/roboto.css',
   'open sans, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/open-sans.css',
   'poppins, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/poppins.css',
   'montserrat, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/montserrat.css',
   'lato, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/lato.css',
   'nunito, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Nunito:wght@400;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/nunito.css',
   'source sans 3, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/source-sans-3.css',
   'playfair display, serif':
-    'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/playfair-display.css',
   'manrope, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/manrope.css',
   'raleway, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/raleway.css',
   'dm sans, sans-serif':
-    'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/dm-sans.css',
   'work sans, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/work-sans.css',
   'karla, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Karla:wght@400;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/karla.css',
   'nunito sans, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/nunito-sans.css',
   'pt sans, sans-serif':
-    'https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/pt-sans.css',
   'oswald, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/oswald.css',
   'space grotesk, sans-serif':
-    'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/space-grotesk.css',
   'merriweather, serif':
-    'https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/merriweather.css',
   'libre baskerville, serif':
-    'https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap',
+    'https://widget.ultimo-bots.com/fonts/1/libre-baskerville.css',
 };
 
 function normalizeFontKey(fontFamily = '') {

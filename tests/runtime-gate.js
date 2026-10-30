@@ -142,7 +142,7 @@ const CENSUS_SCRIPT = `
   })();
 `;
 
-async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null, answer = null } = {}) {
+async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null, answer = null, config = null } = {}) {
   const browser = await chromium.launch();
   const context = await browser.newContext(mobile
     ? { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
@@ -176,6 +176,17 @@ async function withPage(fn, { stallConfig = false, failConfig = false, census = 
     if (r.url().startsWith(API)) apiRequests.push(r.url());
   });
   const js = (body) => (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body });
+  // Widget fonts from the CDN repository next to this one, as GitHub Pages
+  // serves them (CORS *).
+  const allRequests = [];
+  page.on('request', (r) => allRequests.push(r.url()));
+  await page.route('https://widget.ultimo-bots.com/fonts/**', (route) => {
+    const rel = new URL(route.request().url()).pathname.replace(/^\/fonts\//, '');
+    const file = path.join(__dirname, '..', '..', 'ultimo-bots-cdn', 'fonts', ...rel.split('/'));
+    if (!fs.existsSync(file)) return route.fulfill({ status: 404, body: 'missing' });
+    const type = file.endsWith('.css') ? 'text/css' : 'font/woff2';
+    return route.fulfill({ status: 200, contentType: type, headers: { 'Access-Control-Allow-Origin': '*' }, body: fs.readFileSync(file) });
+  });
   await page.route(HOSTED_URL, js(fs.readFileSync(ARTIFACT)));
   if (html) await page.route(LEGACY_URL, js(legacyBundle()));
 
@@ -193,7 +204,7 @@ async function withPage(fn, { stallConfig = false, failConfig = false, census = 
           body: await new Promise(() => {}),
         });
       }
-      return json(CONFIG);
+      return json(config ? { ...CONFIG, ...config } : CONFIG);
     }
     if (url.includes('/api/live_chat_settings_public/')) return json(LIVE_SETTINGS);
     if (url.includes('/api/live/agent_available/')) return json({ available: true });
@@ -238,7 +249,7 @@ async function withPage(fn, { stallConfig = false, failConfig = false, census = 
   const base = `http://127.0.0.1:${server.address().port}/`;
 
   try {
-    return await fn({ page, base, apiRequests, sockets });
+    return await fn({ page, base, apiRequests, sockets, allRequests });
   } finally {
     await browser.close();
     server.close();
@@ -936,6 +947,27 @@ async function testSanitizerProfile() {
   }, { answer: evil });
 }
 
+// ── Fonts come from our own origin, never from Google ─────────────────────
+// The backend default font is Open Sans, so every visitor loads a font.
+async function testFontsSelfHosted() {
+  await withPage(async ({ page, base, allRequests }) => {
+    await page.goto(base);
+    await mounted(page);
+    await page.waitForTimeout(1500);
+    // Browsers fetch a face only when text needs it: ask for it as the chat
+    // text would, then it must be loaded from our origin.
+    const usable = await page.evaluate(async () => {
+      const faces = await document.fonts.load('16px "Open Sans"', 'Hello, how can I help?');
+      return faces.length > 0 && faces.every((f) => f.status === 'loaded');
+    });
+    const google = allRequests.filter((u) => /fonts\.(googleapis|gstatic)\.com/.test(u));
+    const ours = allRequests.filter((u) => u.startsWith('https://widget.ultimo-bots.com/fonts/1/open-sans'));
+    record('fonts: Open Sans from widget.ultimo-bots.com/fonts/1 and usable, no request to Google',
+      google.length === 0 && ours.some((u) => u.endsWith('.css')) && ours.some((u) => u.endsWith('.woff2')) && usable,
+      `google=${google.length} ours=${ours.length} usable=${usable}`);
+  }, { config: { font_family: "'Open Sans', sans-serif" } });
+}
+
 // ── Run ───────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`runtime gate — artifact: ${path.relative(process.cwd(), ARTIFACT)}\n`);
@@ -962,6 +994,7 @@ async function testSanitizerProfile() {
     testChatKeyboard,
     testRequestsNameTheBot,
     testSanitizerProfile,
+    testFontsSelfHosted,
   ];
   for (const t of suite) {
     try {

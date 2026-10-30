@@ -231,6 +231,10 @@ for (const m of src.matchAll(/https:\/\/portal\.ultimo-bots\.com\/api\/(leads\/p
     violations.push({ cls: 'E', line: lineOf(m.index), text: m[0], why: 'request without ?bot_id= (the preflight cannot be decided per bot)' });
   }
 }
+// Fonts only from our own origin (Robert, 30.10.2026).
+for (const m of src.matchAll(/fonts\.(googleapis|gstatic)\.com/g)) {
+  violations.push({ cls: 'G', line: lineOf(m.index), text: m[0], why: 'a widget font from Google instead of widget.ultimo-bots.com/fonts' });
+}
 // One sanitizer profile for every rendered HTML.
 for (const m of src.matchAll(/DOMPurify\.sanitize\(([^)]*)\)/g)) {
   if (!/PURIFY_PROFILE/.test(m[1])) {
