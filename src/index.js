@@ -382,11 +382,21 @@ async function initializeChatWidget(hostContainer) {
   async function ensureMarked() { /* bundled — always ready */ }
   async function loadDompurify() { /* bundled — always ready */ }
 
+  // One sanitizer profile for every piece of HTML the widget renders (AI,
+  // agent and configuration text): links and basic formatting only. No
+  // inline styles or <style> (a full-screen overlay), no forms or inputs (a
+  // fake login), no frames, SVG or MathML (audit 30.10.2026).
+  const PURIFY_PROFILE = {
+    ADD_ATTR: ['target', 'rel'],
+    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'option', 'iframe', 'frame',
+      'object', 'embed', 'svg', 'math', 'link', 'meta', 'base', 'template'],
+    FORBID_ATTR: ['style', 'srcset', 'formaction', 'action'],
+  };
   // Helper: markdown-parse + sanitise.
   function sanitizedMarkdown(text) {
     const html = (typeof marked !== 'undefined') ? marked.parse(text) : String(text || '');
     if (typeof DOMPurify !== 'undefined') {
-      return DOMPurify.sanitize(html, { ADD_ATTR: ['target', 'rel'] });
+      return DOMPurify.sanitize(html, PURIFY_PROFILE);
     }
     // Fallback: escape everything if DOMPurify hasn't loaded yet.
     return html
@@ -2520,7 +2530,7 @@ async function initializeChatWidget(hostContainer) {
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     let res;
     try {
-      res = await fetch(url, { ...options, signal: ctrl.signal });
+      res = await fetch(url, { referrerPolicy: 'strict-origin', ...options, signal: ctrl.signal });
     } catch (err) {
       clearTimeout(timer);
       _inflight.delete(ctrl);
@@ -2826,6 +2836,7 @@ async function initializeChatWidget(hostContainer) {
   chatWindow.className = 'saicf-chat-window hidden';
   chatWindow.setAttribute('role', 'dialog');
   chatWindow.setAttribute('aria-label', widgetHeaderTextRaw);
+  chatWindow.setAttribute('tabindex', '-1');
 
   const logoHTML = logo
     ? `<img src="${logo}" alt="Chat Logo"
@@ -3033,6 +3044,7 @@ async function initializeChatWidget(hostContainer) {
       forceReflow(chatWindow);
       chatWindow.classList.add('show');
       chatOverlay.classList.remove('hidden');
+      focusIntoChat();
 
       if (window.matchMedia('(max-width: 768px)').matches) {
         // Mobile: fullscreen window, launcher hidden underneath.
@@ -3297,7 +3309,7 @@ async function initializeChatWidget(hostContainer) {
       // Bounded: the submit button is disabled while this runs, so an
       // unanswered request would lock the visitor out of the chat for good.
       // On timeout the catch below restores the button.
-      const response = await fetchWithTimeout('https://portal.ultimo-bots.com/api/leads/pre_chat', {
+      const response = await fetchWithTimeout(`https://portal.ultimo-bots.com/api/leads/pre_chat?bot_id=${encodeURIComponent(botId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3376,15 +3388,85 @@ async function initializeChatWidget(hostContainer) {
 
 function toggleMenu(open) {
   const willOpen = typeof open === 'boolean' ? open : !menu.classList.contains('is-open');
+  const wasOpen = menu.classList.contains('is-open');
   menu.classList.toggle('is-open', willOpen);
+  ellipsisBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
   if (willOpen) {
     menu.removeAttribute('aria-hidden');
     menu.removeAttribute('hidden');
+    if (!wasOpen) {
+      const first = menuItems()[0];
+      if (first) first.focus();
+    }
   } else {
     menu.setAttribute('aria-hidden', 'true');
     menu.setAttribute('hidden', '');
   }
 }
+
+  // Keyboard (Webflow #1176883, WF-32). The actions menu is a real menu:
+  // arrow keys, Home and End move between its items, Tab leaves it.
+  ellipsisBtn.setAttribute('aria-haspopup', 'menu');
+  ellipsisBtn.setAttribute('aria-expanded', 'false');
+  function menuItems() {
+    return Array.from(menu.querySelectorAll('[role="menuitem"]')).filter((el) => !el.hidden && !el.disabled);
+  }
+  menu.addEventListener('keydown', (e) => {
+    const items = menuItems();
+    if (!items.length) return;
+    const i = items.indexOf(shadowRoot.activeElement);
+    let next = null;
+    if (e.key === 'ArrowDown') next = items[(i + 1) % items.length];
+    else if (e.key === 'ArrowUp') next = items[(i - 1 + items.length) % items.length];
+    else if (e.key === 'Home') next = items[0];
+    else if (e.key === 'End') next = items[items.length - 1];
+    else if (e.key === 'Tab') toggleMenu(false);
+    if (next) { e.preventDefault(); next.focus(); }
+  });
+
+  // Focus goes into the chat when it opens: the message field on desktop,
+  // the dialog itself on phones (no on-screen keyboard popping up unasked).
+  function focusIntoChat() {
+    ownSetTimeout(() => {
+      if (!chatWindow.classList.contains('show')) return;
+      const phone = window.matchMedia('(max-width: 768px)').matches;
+      const target = !phone && chatInput && !chatInput.disabled && chatInput.offsetParent !== null ? chatInput : chatWindow;
+      try { target.focus({ preventScroll: true }); } catch { target.focus(); }
+    }, 0);
+  }
+
+  // The two confirmations are alert dialogs: focus on Cancel, Tab stays
+  // inside, Escape cancels, and focus returns to where it was. Returns the
+  // function that closes it.
+  function presentConfirm(overlay) {
+    const back = shadowRoot.activeElement;
+    const text = overlay.querySelector('.saicf-confirm-box p');
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-modal', 'true');
+    if (text) {
+      text.id = `saicf-confirm-text-${botId}`;
+      overlay.setAttribute('aria-describedby', text.id);
+      overlay.setAttribute('aria-label', text.textContent || '');
+    }
+    const buttons = Array.from(overlay.querySelectorAll('button'));
+    const close = () => {
+      overlay.remove();
+      const to = back && back.isConnected ? back : chatWindow;
+      try { to.focus({ preventScroll: true }); } catch { to.focus(); }
+    };
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+      if (e.key === 'Tab' && buttons.length) {
+        e.preventDefault();
+        const i = buttons.indexOf(shadowRoot.activeElement);
+        const n = e.shiftKey ? (i <= 0 ? buttons.length - 1 : i - 1) : (i + 1) % buttons.length;
+        buttons[n].focus();
+      }
+    });
+    chatWindow.appendChild(overlay);
+    (buttons[0] || overlay).focus();
+    return close;
+  }
 
 
   shadowRoot.addEventListener('click', (e) => {
@@ -3394,7 +3476,14 @@ function toggleMenu(open) {
   });
 
   shadowRoot.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && menu.classList.contains('is-open')) toggleMenu(false);
+    if (e.key !== 'Escape') return;
+    if (chatWindow.querySelector('.saicf-confirm-overlay')) return;
+    if (menu.classList.contains('is-open')) {
+      toggleMenu(false);
+      ellipsisBtn.focus();
+      return;
+    }
+    if (chatWindow.classList.contains('show')) closeChat();
   });
 
   ellipsisBtn.addEventListener('click', (e) => {
@@ -3442,7 +3531,7 @@ function toggleMenu(open) {
         if (tok) payload.session_token = tok;
         // Bounded like every other request: keepalive lets it outlive the
         // page, the deadline stops it from lingering if the server stalls.
-        fetchWithTimeout('https://portal.ultimo-bots.com/api/live/disconnect', {
+        fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/disconnect?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -3513,12 +3602,12 @@ function toggleMenu(open) {
           </div>
         </div>
       `;
-      overlay.querySelector('.saicf-confirm-cancel').addEventListener('click', () => overlay.remove());
+      const closeConfirm = presentConfirm(overlay);
+      overlay.querySelector('.saicf-confirm-cancel').addEventListener('click', closeConfirm);
       overlay.querySelector('.saicf-confirm-ok').addEventListener('click', () => {
-        overlay.remove();
+        closeConfirm();
         doClearChat();
       });
-      chatWindow.appendChild(overlay);
       return;
     }
 
@@ -3527,9 +3616,15 @@ function toggleMenu(open) {
 
   const _origCloseChat = closeChat;
   closeChat = function () {
+    const visitorWasInChat = !!shadowRoot.activeElement;
     toggleMenu(false);
     resetStreamingBotMessage();
     _origCloseChat();
+    // Back to the launcher, only when the visitor was in the chat (a close
+    // from code never moves the page's focus).
+    if (visitorWasInChat) {
+      try { chatWidgetIcon.focus({ preventScroll: true }); } catch { chatWidgetIcon.focus(); }
+    }
   };
 
   let isBusy = false;
@@ -4008,6 +4103,9 @@ function toggleMenu(open) {
     });
 
     liveWs.addEventListener('message', (ev) => {
+      // Only frames from our own socket (a WebSocket MessageEvent carries the
+      // socket's origin; anything else is not ours to act on).
+      if (ev.origin && ev.origin !== 'wss://portal.ultimo-bots.com') return;
       let event;
       try { event = JSON.parse(ev.data); } catch { return; }
 
@@ -4217,7 +4315,7 @@ function toggleMenu(open) {
       const tok = getStoredSessionToken();
       const body = { message_ids: messageIds };
       if (tok) body.session_token = tok;
-      fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/ack/${sessionId}`, {
+      fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/ack/${sessionId}?bot_id=${encodeURIComponent(botId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -4440,7 +4538,7 @@ function toggleMenu(open) {
           await sendHeartbeat();
           startHeartbeat();
         }
-        let res = await fetchWithTimeout('https://portal.ultimo-bots.com/api/live/request_agent', {
+        let res = await fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/request_agent?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4458,7 +4556,7 @@ function toggleMenu(open) {
           sessionId = generateSessionId();
           storageSet('sessionStorage', `sessionId-${botId}`, sessionId);
           try { await sendHeartbeat(); } catch { /* non-fatal */ }
-          res = await fetchWithTimeout('https://portal.ultimo-bots.com/api/live/request_agent', {
+          res = await fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/request_agent?bot_id=${encodeURIComponent(botId)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -4507,7 +4605,7 @@ function toggleMenu(open) {
           const tok = getStoredSessionToken();
           const cancelBody = { session_id: sessionId };
           if (tok) cancelBody.session_token = tok;
-          const cancelRes = await fetchWithTimeout('https://portal.ultimo-bots.com/api/live/cancel_request', {
+          const cancelRes = await fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/cancel_request?bot_id=${encodeURIComponent(botId)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(cancelBody),
@@ -4559,14 +4657,15 @@ function toggleMenu(open) {
         </div>
       </div>
     `;
-    overlay.querySelector('.saicf-confirm-cancel').addEventListener('click', () => overlay.remove());
+    const closeConfirm = presentConfirm(overlay);
+    overlay.querySelector('.saicf-confirm-cancel').addEventListener('click', closeConfirm);
     overlay.querySelector('.saicf-confirm-ok').addEventListener('click', async () => {
-      overlay.remove();
+      closeConfirm();
       try {
         const tok = getStoredSessionToken();
         const cancelBody = { session_id: sessionId };
         if (tok) cancelBody.session_token = tok;
-        const cancelRes = await fetchWithTimeout('https://portal.ultimo-bots.com/api/live/cancel_request', {
+        const cancelRes = await fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/cancel_request?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cancelBody),
@@ -4582,7 +4681,6 @@ function toggleMenu(open) {
         setLiveSessionStatusFn('active');
       }
     });
-    chatWindow.appendChild(overlay);
   }
 
   // ── Live chat: System notice helper ──
@@ -4782,7 +4880,7 @@ function toggleMenu(open) {
         page_url: window.location.origin + window.location.pathname,
       };
       if (storedToken) body.session_token = storedToken;
-      const res = await fetchWithTimeout('https://portal.ultimo-bots.com/api/live/heartbeat', {
+      const res = await fetchWithTimeout(`https://portal.ultimo-bots.com/api/live/heartbeat?bot_id=${encodeURIComponent(botId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -4828,7 +4926,7 @@ function toggleMenu(open) {
         const tok = getStoredSessionToken();
         // Session token travels as a header, never in the URL (data minimisation).
         const seedRes = await fetchWithTimeout(
-          `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=0`,
+          `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=0&bot_id=${encodeURIComponent(botId)}`,
           { headers: tok ? { 'X-Live-Session-Token': tok } : {} },
           10000
         );
@@ -4873,7 +4971,7 @@ function toggleMenu(open) {
       const tok = getStoredSessionToken();
       // Session token travels as a header, never in the URL (data minimisation).
       const res = await fetchWithTimeout(
-        `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=${lastAgentMessageId}`,
+        `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=${lastAgentMessageId}&bot_id=${encodeURIComponent(botId)}`,
         { headers: tok ? { 'X-Live-Session-Token': tok } : {} },
         10000
       );
@@ -5029,6 +5127,7 @@ function toggleMenu(open) {
     // Ensure the newest message (e.g. an agent reply that arrived while the
     // widget was minimized) is visible on first view.
     requestAnimationFrame(() => scrollToBottom());
+    focusIntoChat();
   });
 
   closeChatBtn.addEventListener('click', () => {
@@ -5549,6 +5648,7 @@ function toggleMenu(open) {
             bot_id: botId,
             language: 'english',
           }),
+          referrerPolicy: 'strict-origin',
           signal: aborter.signal,
         });
         if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
@@ -6091,7 +6191,7 @@ function toggleMenu(open) {
       chatWindow.removeEventListener('keydown', onKeydown, true);
     }
     function onKeydown(e) {
-      if (e.key === 'Escape') close();
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
     }
     closeBtn.addEventListener('click', close);
     overlay.addEventListener('click', (e) => {
@@ -6725,7 +6825,7 @@ function toggleMenu(open) {
           const bubble = document.createElement('div');
           bubble.className = `saicf-widget-message widget-${msg.sender}-message`;
           if (typeof DOMPurify !== 'undefined') {
-            bubble.innerHTML = DOMPurify.sanitize(msg.text, { ADD_ATTR: ['target', 'rel'] });
+            bubble.innerHTML = DOMPurify.sanitize(msg.text, PURIFY_PROFILE);
           } else {
             bubble.textContent = msg.text;
           }

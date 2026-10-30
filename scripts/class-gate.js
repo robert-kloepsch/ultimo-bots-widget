@@ -218,6 +218,25 @@ if (!/initializeChatWidget\(container\)\)\s*\n\s*\.catch\(\(err\) => \{[\s\S]{0,
 if (!/if \(__ULTIMO_AUTO_TEASER__ && popUpMessages\)/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'popUpTimer', why: 'the timed teaser is not behind __ULTIMO_AUTO_TEASER__' });
 }
+// 1.3.2 (#1176883 WF-32): Escape closes the chat, focus goes into it on open
+// and back to the launcher, the menu has arrow keys, confirmations are dialogs.
+if (!/function focusIntoChat\(\)/.test(src) || !/if \(chatWindow\.classList\.contains\('show'\)\) closeChat\(\);/.test(src)
+    || !/e\.key === 'ArrowDown'/.test(src) || (src.match(/presentConfirm\(overlay\)/g) || []).length < 3) {
+  violations.push({ cls: 'D', line: 0, text: 'keyboard', why: 'chat dialog keyboard support incomplete (focus, Escape, menu keys, confirm dialogs)' });
+}
+// 1.3.2 (#1176883 WF-45): every request with a body names the bot in its URL.
+for (const m of src.matchAll(/https:\/\/portal\.ultimo-bots\.com\/api\/(leads\/pre_chat|live\/(?:disconnect|request_agent|cancel_request|heartbeat|resume|ack\/\$\{sessionId\}|messages\/\$\{sessionId\}\?after_id=[^`]*?))([`'?&])/g)) {
+  const tail = src.slice(m.index, m.index + 200).split('`')[0];
+  if (!/bot_id=\$\{encodeURIComponent\(botId\)\}/.test(tail)) {
+    violations.push({ cls: 'E', line: lineOf(m.index), text: m[0], why: 'request without ?bot_id= (the preflight cannot be decided per bot)' });
+  }
+}
+// One sanitizer profile for every rendered HTML.
+for (const m of src.matchAll(/DOMPurify\.sanitize\(([^)]*)\)/g)) {
+  if (!/PURIFY_PROFILE/.test(m[1])) {
+    violations.push({ cls: 'A', line: lineOf(m.index), text: m[0], why: 'sanitize without the widget profile (PURIFY_PROFILE)' });
+  }
+}
 // 1.3.2 (Webflow #1197336): only our own namespaced container. The generic
 // #chat-widget-container belongs to an old pasted embed and is never taken over.
 for (const m of src.matchAll(/getElementById\(\s*['"`]chat-widget-container['"`]\s*\)/g)) {

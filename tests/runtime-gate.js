@@ -142,7 +142,7 @@ const CENSUS_SCRIPT = `
   })();
 `;
 
-async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null } = {}) {
+async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null, answer = null } = {}) {
   const browser = await chromium.launch();
   const context = await browser.newContext(mobile
     ? { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
@@ -205,7 +205,7 @@ async function withPage(fn, { stallConfig = false, failConfig = false, census = 
         status: 200,
         contentType: 'text/event-stream',
         body: sse([
-          'data: Here is what I found',
+          `data: ${answer || 'Here is what I found'}`,
           'event: products\ndata: ' + JSON.stringify({
             products: [{
               title: 'Injected product',
@@ -839,6 +839,103 @@ async function testLegacyEmbedAloneStillStarts() {
   }, { html: hostPage('', PASTED) });
 }
 
+// ── WF-32: the chat and its controls work with the keyboard alone ────────
+// #1176883: Escape closes the chat dialog, focus moves into the dialog when
+// it opens and back to the launcher when it closes; the actions menu works
+// with arrow keys.
+async function testChatKeyboard() {
+  await withPage(async ({ page, base }) => {
+    await page.goto(base);
+    await mounted(page);
+    const state = () => page.evaluate(() => {
+      const host = document.getElementById('ultimo-bots-container-TESTBOT');
+      const sr = host.shadowRoot;
+      const a = sr.activeElement;
+      return {
+        open: !!sr.querySelector('.saicf-chat-window.show'),
+        focus: a ? (a.className || a.tagName) : (document.activeElement === document.body ? 'body' : 'page'),
+        expanded: sr.querySelector('.saicf-ellipsis-btn').getAttribute('aria-expanded'),
+      };
+    });
+    // Tab to the launcher (the only focusable thing on the host page), Enter.
+    await page.keyboard.press('Tab');
+    const onLauncher = (await state()).focus.includes('saicf-chat-widget-icon');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(800);
+    const opened = await state();
+    // The menu: Shift+Tab back to the header controls is layout-dependent, so
+    // focus the menu button directly and drive it with keys only.
+    await page.evaluate(() => document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot.querySelector('.saicf-ellipsis-btn').focus());
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(200);
+    const menuOpen = await state();
+    await page.keyboard.press('End');
+    const atEnd = await state();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    const menuClosed = await state();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    const closed = await state();
+    record('keyboard: Enter opens with focus inside, menu by keys, Escape closes menu then chat, focus back on the launcher',
+      onLauncher && opened.open && /saicf-chat-input|TEXTAREA|saicf-chat-window/.test(opened.focus)
+        && menuOpen.expanded === 'true' && /saicf-menu-item/.test(menuOpen.focus) && /saicf-menu-item/.test(atEnd.focus)
+        && menuClosed.expanded === 'false' && /saicf-ellipsis-btn/.test(menuClosed.focus) && menuClosed.open
+        && !closed.open && closed.focus.includes('saicf-chat-widget-icon'),
+      `launcher=${onLauncher} | opened=${opened.open}/${opened.focus} | menu=${menuOpen.expanded}/${menuOpen.focus} | end=${atEnd.focus} | menuClosed=${menuClosed.expanded}/${menuClosed.focus} | closed=${!closed.open}/${closed.focus}`);
+  });
+}
+
+// ── WF-45: every request that carries a body names the bot in the URL ─────
+// so the preflight is decided per bot (no preflight from an arbitrary origin).
+async function testRequestsNameTheBot() {
+  await withPage(async ({ page, base, apiRequests }) => {
+    await page.goto(base);
+    await mounted(page);
+    await openChat(page);
+    await page.waitForTimeout(1200);
+    await sendUserMessage(page, 'hello');
+    await page.waitForTimeout(4000);
+    const routes = /\/api\/(chatbot_response|leads\/pre_chat|live\/(heartbeat|disconnect|request_agent|cancel_request|resume|ack\/|messages\/))/;
+    const hit = apiRequests.filter((u) => routes.test(u));
+    const unnamed = hit.filter((u) => !/[?&]bot_id=TESTBOT(&|$)/.test(u));
+    record('requests: every body/live request names the bot in its URL',
+      hit.length > 0 && unnamed.length === 0,
+      `checked=${hit.length} unnamed=${unnamed.length}${unnamed.length ? ` (${unnamed[0]})` : ''}`);
+  });
+}
+
+// ── Sanitizer: rendered HTML keeps links and formatting, nothing else ─────
+async function testSanitizerProfile() {
+  const evil = '<style>*{display:none}</style><div style="position:fixed;inset:0">x</div>'
+    + '<form action="https://evil.example"><input name="pw"><button>Log in</button></form>'
+    + '<a href="https://example.com" style="color:red">link</a><svg><circle r="9"/></svg>';
+  await withPage(async ({ page, base }) => {
+    await page.goto(base);
+    await mounted(page);
+    await openChat(page);
+    await page.waitForTimeout(1200);
+    await sendUserMessage(page, 'show me');
+    await page.waitForTimeout(3500);
+    const found = await page.evaluate(() => {
+      const sr = document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot;
+      const bubbles = Array.from(sr.querySelectorAll('.saicf-message-row'));
+      const last = bubbles[bubbles.length - 1];
+      if (!last) return null;
+      return {
+        style: last.querySelectorAll('style').length,
+        styleAttr: last.querySelectorAll('[style]:not(.saicf-message-row *[class^="saicf"])').length,
+        form: last.querySelectorAll('form, input, button:not([class])').length,
+        svg: last.querySelectorAll('svg circle').length,
+        link: !!last.querySelector('a[href="https://example.com"]'),
+      };
+    });
+    record('sanitizer: no <style>, inline style, form, input or SVG in rendered answers; links stay',
+      !!found && found.style === 0 && found.form === 0 && found.svg === 0 && found.link,
+      JSON.stringify(found));
+  }, { answer: evil });
+}
+
 // ── Run ───────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`runtime gate — artifact: ${path.relative(process.cwd(), ARTIFACT)}\n`);
@@ -862,6 +959,9 @@ async function testLegacyEmbedAloneStillStarts() {
     testAppTagFirstPastedEmbedStaysIdle,
     testLegacyLoaderStaysIdle,
     testLegacyEmbedAloneStillStarts,
+    testChatKeyboard,
+    testRequestsNameTheBot,
+    testSanitizerProfile,
   ];
   for (const t of suite) {
     try {
