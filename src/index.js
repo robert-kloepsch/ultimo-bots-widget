@@ -2973,7 +2973,7 @@ async function initializeChatWidget() {
         return res.ok ? res.json() : null;
       },
       async submit(game, score, durationMs) {
-        const res = await fetch(`https://portal.ultimo-bots.com/api/live/games/${game}/score`, {
+        const res = await fetch(`https://portal.ultimo-bots.com/api/live/games/${game}/score?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3121,7 +3121,7 @@ async function initializeChatWidget() {
         params[field.name] = preChatFormValues[field.id];
       });
 
-      const response = await fetch('https://portal.ultimo-bots.com/api/leads/pre_chat', {
+      const response = await fetch(`https://portal.ultimo-bots.com/api/leads/pre_chat?bot_id=${encodeURIComponent(botId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3265,7 +3265,7 @@ function toggleMenu(open) {
         const tok = getStoredSessionToken();
         const payload = { session_id: sessionId, bot_id: botId };
         if (tok) payload.session_token = tok;
-        fetch('https://portal.ultimo-bots.com/api/live/disconnect', {
+        fetch(`https://portal.ultimo-bots.com/api/live/disconnect?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -4067,7 +4067,7 @@ function toggleMenu(open) {
       const tok = getStoredSessionToken();
       const body = { message_ids: messageIds };
       if (tok) body.session_token = tok;
-      fetch(`https://portal.ultimo-bots.com/api/live/ack/${sessionId}`, {
+      fetch(`https://portal.ultimo-bots.com/api/live/ack/${sessionId}?bot_id=${encodeURIComponent(botId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -4287,7 +4287,7 @@ function toggleMenu(open) {
           await sendHeartbeat();
           startHeartbeat();
         }
-        let res = await fetch('https://portal.ultimo-bots.com/api/live/request_agent', {
+        let res = await fetch(`https://portal.ultimo-bots.com/api/live/request_agent?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4309,7 +4309,7 @@ function toggleMenu(open) {
           sessionId = generateSessionId();
           convSet(CONV_SESSION_KEY, sessionId);
           try { await sendHeartbeat(); } catch { /* non-fatal */ }
-          res = await fetch('https://portal.ultimo-bots.com/api/live/request_agent', {
+          res = await fetch(`https://portal.ultimo-bots.com/api/live/request_agent?bot_id=${encodeURIComponent(botId)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -4367,7 +4367,7 @@ function toggleMenu(open) {
           const tok = getStoredSessionToken();
           const cancelBody = { session_id: sessionId };
           if (tok) cancelBody.session_token = tok;
-          const cancelRes = await fetch('https://portal.ultimo-bots.com/api/live/cancel_request', {
+          const cancelRes = await fetch(`https://portal.ultimo-bots.com/api/live/cancel_request?bot_id=${encodeURIComponent(botId)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(cancelBody),
@@ -4432,7 +4432,7 @@ function toggleMenu(open) {
         const tok = getStoredSessionToken();
         const cancelBody = { session_id: sessionId };
         if (tok) cancelBody.session_token = tok;
-        const cancelRes = await fetch('https://portal.ultimo-bots.com/api/live/cancel_request', {
+        const cancelRes = await fetch(`https://portal.ultimo-bots.com/api/live/cancel_request?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cancelBody),
@@ -4752,7 +4752,7 @@ function toggleMenu(open) {
       };
       if (storedToken) body.session_token = storedToken;
       if (convShared && !convGet(CONV_RESUME_KEY)) body.want_resume_secret = true;
-      const res = await fetch('https://portal.ultimo-bots.com/api/live/heartbeat', {
+      const res = await fetch(`https://portal.ultimo-bots.com/api/live/heartbeat?bot_id=${encodeURIComponent(botId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -4800,7 +4800,7 @@ function toggleMenu(open) {
     if (lastAgentMessageId === 0) {
       try {
         const tok = getStoredSessionToken();
-        const seedUrl = `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=0` +
+        const seedUrl = `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=0&bot_id=${encodeURIComponent(botId)}` +
           (tok ? `&session_token=${encodeURIComponent(tok)}` : '');
         const seedRes = await fetch(seedUrl);
         if (seedRes.status === 401) {
@@ -4838,7 +4838,7 @@ function toggleMenu(open) {
   async function pollAgentMessages() {
     try {
       const tok = getStoredSessionToken();
-      const url = `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=${lastAgentMessageId}` +
+      const url = `https://portal.ultimo-bots.com/api/live/messages/${sessionId}?after_id=${lastAgentMessageId}&bot_id=${encodeURIComponent(botId)}` +
         (tok ? `&session_token=${encodeURIComponent(tok)}` : '');
       const res = await fetch(url);
       if (res.status === 401) {
@@ -4904,7 +4904,7 @@ function toggleMenu(open) {
     let replies = [];
     if (secret) {
       try {
-        const res = await fetch('https://portal.ultimo-bots.com/api/live/resume', {
+        const res = await fetch(`https://portal.ultimo-bots.com/api/live/resume?bot_id=${encodeURIComponent(botId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId, bot_id: botId, resume_secret: secret, after_id: lastAgentMessageId }),
