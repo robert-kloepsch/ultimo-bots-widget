@@ -17,6 +17,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const PW = path.join(__dirname, '..', '..', 'ultimo-bots-portal', 'node_modules', 'playwright');
 const { chromium } = require(PW);
@@ -26,6 +27,14 @@ const ARTIFACT =
   process.argv[2] || path.join(__dirname, '..', 'release', pkg.version, 'ultimo-widget.js');
 const BOT = 'TESTBOT';
 const API = 'https://portal.ultimo-bots.com';
+// Where the two runtimes really come from: the Webflow App applies the hosted
+// release, old pasted embeds and the legacy Webflow loader load the GitHub
+// Pages bundle (widget main). Both are served to the browser from these URLs.
+const HOSTED_URL = `https://widget.ultimo-bots.com/${pkg.version}/ultimo-widget.js`;
+const LEGACY_URL = 'https://robert-kloepsch.github.io/ultimo-bots-widget/dist/bundle.js';
+const legacyBundle = () => (process.env.LEGACY_BUNDLE
+  ? fs.readFileSync(process.env.LEGACY_BUNDLE)
+  : execFileSync('git', ['show', 'main:dist/bundle.js'], { cwd: path.join(__dirname, '..'), maxBuffer: 32 << 20 }));
 
 if (!fs.existsSync(ARTIFACT)) {
   console.error(`artifact not found: ${ARTIFACT}\nrun: npm run build:release`);
@@ -133,7 +142,7 @@ const CENSUS_SCRIPT = `
   })();
 `;
 
-async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false } = {}) {
+async function withPage(fn, { stallConfig = false, failConfig = false, census = false, mobile = false, silentWs = false, html = null } = {}) {
   const browser = await chromium.launch();
   const context = await browser.newContext(mobile
     ? { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }
@@ -166,6 +175,9 @@ async function withPage(fn, { stallConfig = false, failConfig = false, census = 
   page.on('request', (r) => {
     if (r.url().startsWith(API)) apiRequests.push(r.url());
   });
+  const js = (body) => (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body });
+  await page.route(HOSTED_URL, js(fs.readFileSync(ARTIFACT)));
+  if (html) await page.route(LEGACY_URL, js(legacyBundle()));
 
   await page.route(`${API}/api/**`, async (route) => {
     const url = route.request().url();
@@ -216,6 +228,7 @@ async function withPage(fn, { stallConfig = false, failConfig = false, census = 
       return res.end(fs.readFileSync(ARTIFACT));
     }
     res.writeHead(200, { 'Content-Type': 'text/html' });
+    if (html) return res.end(html);
     res.end(`<!doctype html><html><head><title>widget host</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>
       <h1>Host page</h1>
       <script src="/ultimo-widget.js" data-bot_id="${BOT}"></script>
@@ -736,6 +749,71 @@ async function testMobileHostIsolation() {
   }, { mobile: true });
 }
 
+// ── Legacy and replacement runtimes never execute together (WF-11) ───────
+// Customer pages measured 30.10.2026 keep an old pasted embed next to the
+// App's hosted script, both for the same agent; the legacy Webflow loader
+// injects the same GitHub Pages bundle on DOMContentLoaded. Exactly one
+// widget must come up: the hosted release, in its own container.
+const hostPage = (head, body) => `<!doctype html><html><head><title>host</title>${head}</head><body><h1>Host page</h1>${body}</body></html>`;
+const PASTED = `<div id="chat-widget-container" data-user-id="${BOT}"></div><script src="${LEGACY_URL}" defer></script>`;
+const APP_TAG = `<script src="${HOSTED_URL}" data-bot_id="${BOT}"></script>`;
+const LEGACY_LOADER = `<script>document.addEventListener('DOMContentLoaded', function () {
+  var d = document.createElement('div'); d.id = 'chat-widget-container'; d.setAttribute('data-user-id', '${BOT}');
+  document.body.appendChild(d);
+  var s = document.createElement('script'); s.src = '${LEGACY_URL}'; document.body.appendChild(s);
+});</script>`;
+
+const widgets = (page) => page.evaluate(() => {
+  const hosts = [];
+  for (const el of document.querySelectorAll('*')) {
+    if (el.shadowRoot && el.shadowRoot.querySelector('.saicf-chat-widget-icon')) hosts.push(el.id);
+  }
+  const generic = document.getElementById('chat-widget-container');
+  return { hosts, genericUsed: !!(generic && (generic.shadowRoot || generic.children.length)) };
+});
+
+async function oneWidgetOn(name, html) {
+  await withPage(async ({ page, base, apiRequests }) => {
+    await page.goto(base);
+    await mounted(page);
+    await page.waitForTimeout(2500); // room for the legacy bundle to start, if it would
+    const w = await widgets(page);
+    const configs = apiRequests.filter((u) => u.includes('/api/widget_configuration/')).length;
+    record(`one runtime: ${name}`,
+      w.hosts.length === 1 && w.hosts[0] === `ultimo-bots-container-${BOT}` && !w.genericUsed && configs === 1,
+      `widgets=${JSON.stringify(w.hosts)} genericUsed=${w.genericUsed} configRequests=${configs}`);
+  }, { html });
+}
+
+async function testPastedEmbedFirstStaysIdle() {
+  await oneWidgetOn('old pasted embed before the App tag', hostPage('', PASTED + APP_TAG));
+}
+
+async function testAppTagFirstPastedEmbedStaysIdle() {
+  await oneWidgetOn('App tag in the head, old pasted embed in the body', hostPage(APP_TAG, `<div id="chat-widget-container" data-user-id="${BOT}"></div><script src="${LEGACY_URL}"></script>`));
+}
+
+async function testLegacyLoaderStaysIdle() {
+  await oneWidgetOn('legacy Webflow loader copy next to the App tag', hostPage(LEGACY_LOADER + APP_TAG, ''));
+}
+
+// Every other embed (portal snippet, WordPress, Shopify, the docs site) loads
+// the GitHub Pages bundle alone and must keep starting.
+async function testLegacyEmbedAloneStillStarts() {
+  await withPage(async ({ page, base, apiRequests }) => {
+    await page.goto(base);
+    let w = { hosts: [] };
+    for (let i = 0; i < 60 && !w.hosts.length; i++) {
+      await page.waitForTimeout(250);
+      w = await widgets(page);
+    }
+    const configs = apiRequests.filter((u) => u.includes('/api/widget_configuration/')).length;
+    record('one runtime: the pasted embed alone still starts',
+      w.hosts.length === 1 && w.hosts[0] === 'chat-widget-container' && configs === 1,
+      `widgets=${JSON.stringify(w.hosts)} configRequests=${configs}`);
+  }, { html: hostPage('', PASTED) });
+}
+
 // ── Run ───────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`runtime gate — artifact: ${path.relative(process.cwd(), ARTIFACT)}\n`);
@@ -754,6 +832,10 @@ async function testMobileHostIsolation() {
     testMobileHostIsolation,
     testReinjectedRuntime,
     testInjectedOnlyResolvesFromPageTag,
+    testPastedEmbedFirstStaysIdle,
+    testAppTagFirstPastedEmbedStaysIdle,
+    testLegacyLoaderStaysIdle,
+    testLegacyEmbedAloneStillStarts,
   ];
   for (const t of suite) {
     try {

@@ -218,6 +218,11 @@ if (!/initializeChatWidget\(container\)\)\s*\n\s*\.catch\(\(err\) => \{[\s\S]{0,
 if (!/if \(__ULTIMO_AUTO_TEASER__ && popUpMessages\)/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'popUpTimer', why: 'the timed teaser is not behind __ULTIMO_AUTO_TEASER__' });
 }
+// 1.3.2 (Webflow #1197336): only our own namespaced container. The generic
+// #chat-widget-container belongs to an old pasted embed and is never taken over.
+for (const m of src.matchAll(/getElementById\(\s*['"`]chat-widget-container['"`]\s*\)/g)) {
+  violations.push({ cls: 'C', line: lineOf(m.index), text: m[0], why: 'takes over the generic container of a legacy embed' });
+}
 // 1.3.2 (audit 30.10.2026): the WebSocket handshake has a deadline too.
 if (!/new WebSocket\([^)]*\);[\s\S]{0,400}ownSetTimeout\(\(\) => \{[\s\S]{0,160}\.close\(\)[\s\S]{0,80}WS_HANDSHAKE_MS\)/.test(src)) {
   violations.push({ cls: 'E', line: 0, text: 'new WebSocket', why: 'the WebSocket handshake has no deadline' });

@@ -258,13 +258,13 @@ function mountRegistry() {
   function startIfReady() {
     if (started) return true;
     const registry = mountRegistry();
-    // Legacy embeds pre-create this generic container; keep supporting it.
-    let container = document.getElementById('chat-widget-container');
-    // Webflow hosted-script path: no pre-created container — find or build a
-    // NAMESPACED one from the bot id found on our own <script> tag.
-    if (!container && OWN_SCRIPT_BOT_ID) {
-      container = document.getElementById(`ultimo-bots-container-${OWN_SCRIPT_BOT_ID}`);
-    }
+    // Only our own NAMESPACED container, found or built from the bot id on our
+    // own <script> tag. The generic #chat-widget-container belongs to an old
+    // pasted embed; this release never takes it over (Webflow #1197336), and
+    // that embed stays idle next to us (GitHub Pages bundle since 30.10.2026).
+    let container = OWN_SCRIPT_BOT_ID
+      ? document.getElementById(`ultimo-bots-container-${OWN_SCRIPT_BOT_ID}`)
+      : null;
     if (!container && OWN_SCRIPT_BOT_ID && document.body) {
       container = document.createElement('div');
       container.id = `ultimo-bots-container-${OWN_SCRIPT_BOT_ID}`;
@@ -394,7 +394,7 @@ async function initializeChatWidget(hostContainer) {
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  const container = hostContainer || document.getElementById('chat-widget-container');
+  const container = hostContainer;
   if (!container) { console.error('Chat widget container not found'); return; }
 
   if (container.parentElement !== document.body) document.body.appendChild(container);
@@ -410,8 +410,8 @@ async function initializeChatWidget(hostContainer) {
     // just as empty. Diagnosed 2026-08-09 on a merchant's Dawn store.
     // An INLINE declaration outranks any normal author rule regardless of
     // specificity, which is all it takes. Deliberately NOT !important: a site
-    // that hides the widget on purpose (`#chat-widget-container { display:
-    // none !important }`) must keep winning over us.
+    // that hides the widget on purpose (`[id^="ultimo-bots-container-"] {
+    // display: none !important }`) must keep winning over us.
     display: 'block',
     position: 'fixed',
     top: '0',
