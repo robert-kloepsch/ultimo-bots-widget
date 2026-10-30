@@ -2505,17 +2505,28 @@ async function initializeChatWidget(hostContainer) {
   // fetch promise settled. So the abort stays armed until a body reader has
   // actually finished — the same AbortController also tears down the body
   // stream, which is what unblocks the await.
+  // A destroyed instance starts no request, and every request still in flight
+  // is aborted with it (Webflow #1173952, #1176883: no vendor network activity
+  // after destroy).
+  const _inflight = new Set();
+  registerCleanup(() => {
+    _inflight.forEach((c) => { try { c.abort(); } catch { /* finished */ } });
+    _inflight.clear();
+  });
   const fetchWithTimeout = async (url, options = {}, timeoutMs = 10000) => {
+    if (destroyed) throw new DOMException('Ultimo Bots widget destroyed', 'AbortError');
     const ctrl = new AbortController();
+    _inflight.add(ctrl);
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     let res;
     try {
       res = await fetch(url, { ...options, signal: ctrl.signal });
     } catch (err) {
       clearTimeout(timer);
+      _inflight.delete(ctrl);
       throw err;
     }
-    const clear = () => clearTimeout(timer);
+    const clear = () => { clearTimeout(timer); _inflight.delete(ctrl); };
     ['json', 'text', 'arrayBuffer', 'blob', 'formData'].forEach((method) => {
       const original = res[method];
       if (typeof original !== 'function') return;

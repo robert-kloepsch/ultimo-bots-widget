@@ -374,6 +374,31 @@ async function testDestroySilence() {
   });
 }
 
+// ── 2b. A request in flight at destroy() is aborted at once (WF-29) ───────
+// #1173952 / #1176883: no vendor network activity after destroy. The
+// configuration request is held open by the mock; destroy() must end it
+// right away (not when its 12 s deadline fires) and nothing may follow.
+async function testDestroyAbortsInflight() {
+  await withPage(async ({ page, base, apiRequests }) => {
+    const aborted = [];
+    page.on('requestfailed', (r) => {
+      if (r.url().includes('/api/widget_configuration/')) aborted.push(Date.now());
+    });
+    await page.goto(base);
+    await mounted(page);
+    await page.waitForTimeout(500);
+    const t0 = Date.now();
+    await page.evaluate(() => window.__ULTIMO_BOTS__.destroy());
+    const requestsAtDestroy = apiRequests.length;
+    await page.waitForTimeout(3000);
+    const after = aborted.length ? aborted[0] - t0 : null;
+    const later = apiRequests.slice(requestsAtDestroy);
+    record('destroy during load: the pending request is aborted at once, nothing follows',
+      after !== null && after < 1500 && later.length === 0,
+      `aborted ${after === null ? 'not within 3 s' : `${after} ms after destroy`} | requests after destroy=${later.length}`);
+  }, { stallConfig: true });
+}
+
 // ── 3. A failed init rolls back and a later execution recovers ────────────
 async function testFailedInitRecovers() {
   await withPage(async ({ page, base }) => {
@@ -820,6 +845,7 @@ async function testLegacyEmbedAloneStillStarts() {
   const suite = [
     testMount,
     testDestroySilence,
+    testDestroyAbortsInflight,
     testFailedInitRecovers,
     testBodyStall,
     testProductUrlNeutralised,
