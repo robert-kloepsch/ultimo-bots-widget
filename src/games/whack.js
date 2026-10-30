@@ -48,6 +48,7 @@ export function createWhackGame() {
   let running = false;
   let tickTimer = null;
   let moleTimer = null;
+  const hitTimers = new Set();
 
   function clearTimers() {
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
@@ -150,7 +151,8 @@ export function createWhackGame() {
     const el = holeEls[i];
     el.classList.remove('is-up');
     el.classList.add('is-hit');
-    setTimeout(() => el.classList.remove('is-hit'), 200);
+    const hit = setTimeout(() => { hitTimers.delete(hit); el.classList.remove('is-hit'); }, 200);
+    hitTimers.add(hit);
     activeIndex = -1;
     renderStatus();
 
@@ -218,6 +220,8 @@ export function createWhackGame() {
 
     destroy() {
       clearTimers();
+      hitTimers.forEach(clearTimeout);
+      hitTimers.clear();
       holeEls = [];
       statusEl = null;
       ringEl = null;

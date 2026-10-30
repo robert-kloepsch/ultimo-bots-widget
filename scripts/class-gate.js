@@ -207,9 +207,22 @@ MUST_GUARD.forEach((fn) => {
 if (!/destroy\(\) \{\s*\n\s*if \(destroyed\) return;/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'destroy()', why: 'teardown is not idempotent' });
 }
-if (!/if \(pending && pending\.status === 'mounting'\)/.test(src)) {
+// 1.3.2 (#1176883 F1): a failed initialization is rolled back whatever its
+// status, 'mounted' included, through the registry's destroy().
+if (!/initializeChatWidget\(container\)\)\s*\n\s*\.catch\(\(err\) => \{[\s\S]{0,200}registry\.destroy\(botId\)/.test(src)) {
   violations.push({ cls: 'C', line: 0, text: 'mount registry', why: 'a failed initialization is not rolled back' });
 }
+// 1.3.2 (#1173952 F2): the waiting-room games end with the instance.
+if (!/registerCleanup\(\(\) => gameCenter\.teardown\(\)\)/.test(src)) {
+  violations.push({ cls: 'C', line: 0, text: 'gameCenter', why: 'the game center is not torn down with the instance' });
+}
+// 1.3.2 (#1176883 F1): storage can throw (SecurityError, quota), so every
+// access goes through storageGet/storageSet/storageRemove.
+src.split('\n').forEach((l, i) => {
+  if (/(?<![\w.[])(sessionStorage|localStorage)\.\w+\(/.test(l)) {
+    violations.push({ cls: 'C', line: i + 1, text: l.trim(), why: 'storage accessed directly instead of through the storage helpers' });
+  }
+});
 // Timer census: inside the instance every setTimeout/setInterval must be the
 // owned variant (tracked, guarded, cleared on destroy). The only native timers
 // allowed are request-abort timers, identified by `.abort()` on the same line.

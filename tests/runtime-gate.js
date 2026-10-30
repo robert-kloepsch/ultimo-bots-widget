@@ -549,6 +549,99 @@ async function testTeardownCensus() {
   }, { census: true });
 }
 
+// ── 7b. Teardown census with a waiting-room game open (1.3.2) ─────────────
+// #1173952 F2: the game center's offer timer, its document visibilitychange
+// listener and the game's own timers survived destroy(). Queue for an agent,
+// open the game, then count what is left after teardown.
+async function testGameTeardownCensus() {
+  await withPage(async ({ page, base, apiRequests, sockets }) => {
+    await page.goto(base);
+    await mounted(page);
+    await openChat(page);
+    await page.waitForTimeout(1500);
+    await sendUserMessage(page, 'hello');
+    await page.waitForTimeout(3000);
+    if (sockets.length === 0) {
+      return record('game teardown census: nothing of the game survives destroy()', false, 'no WebSocket was opened');
+    }
+    await sockets[sockets.length - 1].send(JSON.stringify({ type: 'live_agent_requested' }));
+    await page.waitForTimeout(1000);
+    const opened = await page.evaluate(() => {
+      const sr = document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot;
+      const offer = sr.querySelector('.saicf-game-offer');
+      if (!offer) return false;
+      offer.click();
+      return !!sr.querySelector('.saicf-game-overlay');
+    });
+    await page.waitForTimeout(1500);
+    const gameListeners = await page.evaluate(() => window.__CENSUS__.listeners.get('document:visibilitychange') || 0);
+
+    await page.evaluate(() => window.__ULTIMO_BOTS__.destroy());
+    await page.waitForTimeout(1000);
+    const after = await page.evaluate(() => {
+      const c = window.__CENSUS__;
+      c.marked = true;
+      return {
+        listeners: [...c.listeners.entries()].filter(([, n]) => n > 0).map(([k, n]) => `${k}=${n}`),
+        timersOpen: c.timersOpen.size,
+      };
+    });
+    const reqAtDestroy = apiRequests.length;
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => { window.__CENSUS__.visibility = 'hidden'; document.dispatchEvent(new Event('visibilitychange')); });
+      await page.waitForTimeout(300);
+      await page.evaluate(() => { window.__CENSUS__.visibility = 'visible'; document.dispatchEvent(new Event('visibilitychange')); });
+      await page.waitForTimeout(300);
+    }
+    await page.waitForTimeout(5000);
+    const fires = await page.evaluate(() => window.__CENSUS__.firesAfterMark);
+
+    record('game teardown census: nothing of the game survives destroy()',
+      opened && after.listeners.length === 0 && after.timersOpen === 0 && fires === 0 && apiRequests.length === reqAtDestroy,
+      `game opened=${opened} | visibilitychange listeners while playing=${gameListeners} | surviving listeners=${JSON.stringify(after.listeners)} | open timers=${after.timersOpen} | timer fires after destroy=${fires}`);
+  }, { census: true });
+}
+
+// ── 7c. Blocked storage (1.3.2) ───────────────────────────────────────────
+// #1176883 F1: with site data blocked, reading sessionStorage throws a
+// SecurityError. The widget must mount and answer anyway.
+async function testBlockedStorageMounts() {
+  await withPage(async ({ page, base }) => {
+    await page.addInitScript(() => {
+      for (const kind of ['sessionStorage', 'localStorage']) {
+        Object.defineProperty(window, kind, {
+          configurable: true,
+          get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+        });
+      }
+    });
+    const warnings = [];
+    page.on('console', (m) => { if (/initialization failed|config load failed/i.test(m.text())) warnings.push(m.text()); });
+    await page.goto(base);
+    let ok = false;
+    try { await mounted(page); ok = true; } catch { /* stays false */ }
+    // 1.3.1 registered itself as mounted and then threw before building its
+    // shadow root: a registry entry alone is not a mounted widget.
+    ok = ok && await page.waitForFunction(() => {
+      const host = document.getElementById('ultimo-bots-container-TESTBOT');
+      return !!(host && host.shadowRoot && host.shadowRoot.querySelector('.saicf-chat-widget-icon'));
+    }, null, { timeout: 5000 }).then(() => true, () => false);
+    if (ok) {
+      await openChat(page);
+      await page.waitForTimeout(1000);
+      await sendUserMessage(page, 'hello');
+      await page.waitForTimeout(2500);
+    }
+    const answered = ok && await page.evaluate(() => {
+      const sr = document.getElementById('ultimo-bots-container-TESTBOT').shadowRoot;
+      return /Here is what I found/.test(sr.textContent || '');
+    });
+    record('blocked storage: the widget mounts and answers',
+      ok && answered && warnings.length === 0,
+      `mounted=${ok} | answered=${answered} | init warnings=${JSON.stringify(warnings)}`);
+  });
+}
+
 // ── 8. Mobile: the host page is never restyled ─────────────────────────────
 // Finding 5 on 1.2.0: opening the widget at a phone width put position:fixed,
 // overflow:hidden, inset:0, width:100% onto the customer's body and html.
@@ -604,6 +697,8 @@ async function testMobileHostIsolation() {
     testProductUrlNeutralised,
     testAgentPopupKeyboard,
     testTeardownCensus,
+    testGameTeardownCensus,
+    testBlockedStorageMounts,
     testMobileHostIsolation,
     testReinjectedRuntime,
     testInjectedOnlyResolvesFromPageTag,

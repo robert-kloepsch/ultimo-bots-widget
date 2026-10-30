@@ -211,6 +211,25 @@ function deriveDisclosureIconColor(themeColorHex) {
 // build a second widget root; and the host page gets a documented teardown:
 //   window.__ULTIMO_BOTS__.destroy(botId?)  — removes the widget and frees
 //   every timer, socket and stream it owns.
+// Storage can throw: a SecurityError when the visitor blocks site data or the
+// page runs in a sandboxed frame, a QuotaExceededError when it is full. The
+// widget must still mount (Webflow #1176883 F1), so these never throw and keep
+// the value for this page view instead.
+const _memoryStorage = { sessionStorage: new Map(), localStorage: new Map() };
+function storageGet(kind, key) {
+  const memory = _memoryStorage[kind];
+  if (memory.has(key)) return memory.get(key);
+  try { return window[kind].getItem(key); } catch { return null; }
+}
+function storageSet(kind, key, value) {
+  try { window[kind].setItem(key, value); _memoryStorage[kind].delete(key); }
+  catch { _memoryStorage[kind].set(key, String(value)); }
+}
+function storageRemove(kind, key) {
+  _memoryStorage[kind].delete(key);
+  try { window[kind].removeItem(key); } catch { /* nothing stored there */ }
+}
+
 function mountRegistry() {
   const w = window;
   if (!w.__ULTIMO_BOTS__) {
@@ -264,15 +283,14 @@ function mountRegistry() {
       // treats any entry as "already mounted", so a half-finished mount would
       // block every later execution from ever building the widget again — and
       // that entry carries no destroy() either. Roll it back on failure so a
-      // later execution can recover.
+      // later execution can recover. A failure after the instance registered
+      // itself ('mounted') is rolled back the same way: its destroy() releases
+      // whatever was already built (Webflow #1176883 F1).
       Promise.resolve()
         .then(() => initializeChatWidget(container))
         .catch((err) => {
           console.warn('Ultimo Bots: widget initialization failed', err);
-          const pending = registry.instances[botId];
-          if (pending && pending.status === 'mounting') {
-            delete registry.instances[botId];
-          }
+          try { registry.destroy(botId); } catch { delete registry.instances[botId]; }
           started = false;
         });
       return true;
@@ -476,12 +494,12 @@ async function initializeChatWidget(hostContainer) {
   };
 
   const POPUP_KEY = `saicf-popup-seen-${botId}`;
-  let   popUpSeen = sessionStorage.getItem(POPUP_KEY) === '1';
+  let   popUpSeen = storageGet('sessionStorage', POPUP_KEY) === '1';
 
   function markPopUpSeen() {
     if (!popUpSeen) {
       popUpSeen = true;
-      sessionStorage.setItem(POPUP_KEY, '1');
+      storageSet('sessionStorage', POPUP_KEY, '1');
     }
   }
 
@@ -2519,7 +2537,7 @@ async function initializeChatWidget(hostContainer) {
   let preChatFields = [];
   let requirePreChat = false;
   const PRE_CHAT_KEY = `saicf-prechat-completed-${botId}`;
-  let preChatCompleted = localStorage.getItem(PRE_CHAT_KEY) === '1';
+  let preChatCompleted = storageGet('localStorage', PRE_CHAT_KEY) === '1';
   const startTime = Date.now();
 
   try {
@@ -3140,6 +3158,9 @@ async function initializeChatWidget(hostContainer) {
   // quick replies, composer) so it gets the full height and never scrolls.
   // Pure UI: it owns no live-chat state, see src/games/index.js.
   const gameCenter = createGameCenter({ mountTarget: chatWindow });
+  // Its offer timer, visibilitychange listener and game timers end with the
+  // instance (Webflow #1173952 F2).
+  registerCleanup(() => gameCenter.teardown());
 
   // Create spacer + sentinel elements for scroll positioning
   const bottomSpacerEl = document.createElement('div');
@@ -3280,7 +3301,7 @@ async function initializeChatWidget(hostContainer) {
       }
 
       preChatCompleted = true;
-      localStorage.setItem(PRE_CHAT_KEY, '1');
+      storageSet('localStorage', PRE_CHAT_KEY, '1');
 
       // Treat pre-chat submission as the start of a chat: kick off the
       // heartbeat so the backend creates the live session row and fires the
@@ -3426,8 +3447,8 @@ function toggleMenu(open) {
     wsAuthenticated = false;
 
     sessionId = generateSessionId();
-    sessionStorage.setItem(`sessionId-${botId}`, sessionId);
-    sessionStorage.removeItem(`chat-history-${botId}`);
+    storageSet('sessionStorage', `sessionId-${botId}`, sessionId);
+    storageRemove('sessionStorage', `chat-history-${botId}`);
 
     // W17: Don't restart heartbeat for new session — wait for first message
     liveHeartbeatStarted = false;
@@ -3830,8 +3851,8 @@ function toggleMenu(open) {
     });
   }
 
-  let sessionId = sessionStorage.getItem(`sessionId-${botId}`) || generateSessionId();
-  sessionStorage.setItem(`sessionId-${botId}`, sessionId);
+  let sessionId = storageGet('sessionStorage', `sessionId-${botId}`) || generateSessionId();
+  storageSet('sessionStorage', `sessionId-${botId}`, sessionId);
   let widgetOpenedOnce = popUpSeen;
   let streamingBotRow = null;
   let streamingBotBubble = null;
@@ -3862,13 +3883,13 @@ function toggleMenu(open) {
   // other's tokens.
   const LIVE_TOKEN_STORAGE_KEY = `ultimo_live_session_token-${botId}`;
   function getStoredSessionToken() {
-    try { return sessionStorage.getItem(LIVE_TOKEN_STORAGE_KEY) || null; }
+    try { return storageGet('sessionStorage', LIVE_TOKEN_STORAGE_KEY) || null; }
     catch { return null; }
   }
   function setStoredSessionToken(t) {
     try {
-      if (t) sessionStorage.setItem(LIVE_TOKEN_STORAGE_KEY, t);
-      else sessionStorage.removeItem(LIVE_TOKEN_STORAGE_KEY);
+      if (t) storageSet('sessionStorage', LIVE_TOKEN_STORAGE_KEY, t);
+      else storageRemove('sessionStorage', LIVE_TOKEN_STORAGE_KEY);
     } catch {}
   }
   // Drop all live state so the next user action re-bootstraps with a fresh
@@ -3892,7 +3913,7 @@ function toggleMenu(open) {
     hideAgentBar();
     // Rotate the session id so the next heartbeat registers cleanly.
     sessionId = generateSessionId();
-    try { sessionStorage.setItem(`sessionId-${botId}`, sessionId); } catch {}
+    try { storageSet('sessionStorage', `sessionId-${botId}`, sessionId); } catch {}
   }
   // Per-session agent display name. Set by `live_agent_joined` / `widget_init_ack`
   // events when the portal agent picked a custom name in JoinConversationModal.
@@ -4414,7 +4435,7 @@ function toggleMenu(open) {
         if (res.status === 400 || res.status === 401) {
           setStoredSessionToken(null);
           sessionId = generateSessionId();
-          sessionStorage.setItem(`sessionId-${botId}`, sessionId);
+          storageSet('sessionStorage', `sessionId-${botId}`, sessionId);
           try { await sendHeartbeat(); } catch { /* non-fatal */ }
           res = await fetchWithTimeout('https://portal.ultimo-bots.com/api/live/request_agent', {
             method: 'POST',
@@ -4622,7 +4643,7 @@ function toggleMenu(open) {
       // would be lost after a refresh while an agent is joined.
       if (
         chatBody.querySelectorAll('.saicf-message-row').length === 0 &&
-        !sessionStorage.getItem(`chat-history-${botId}`) &&
+        !storageGet('sessionStorage', `chat-history-${botId}`) &&
         Array.isArray(welcomeMessages) && welcomeMessages.length
       ) {
         welcomeMessages.forEach(msg => appendMessage(msg, 'bot', { skipSave: true }));
@@ -4872,7 +4893,7 @@ function toggleMenu(open) {
   // Heartbeat drives session creation in the portal and is what powers the
   // "new visitor" / "new message" notifications — it must run regardless of
   // whether any agent is currently online — we always want to track sessions.
-  if (sessionStorage.getItem(`chat-history-${botId}`)) {
+  if (storageGet('sessionStorage', `chat-history-${botId}`)) {
     liveHeartbeatStarted = true;
     // Eagerly restore chat history BEFORE opening the WS. Otherwise the
     // backend's `widget_init_ack` (session_status='agent_joined') can arrive
@@ -6599,7 +6620,7 @@ function toggleMenu(open) {
       }
     });
     try {
-      sessionStorage.setItem(`chat-history-${botId}`, JSON.stringify(items));
+      storageSet('sessionStorage', `chat-history-${botId}`, JSON.stringify(items));
     } catch (err) {
       // Quota/serialisation failure must never break the send flow — the live
       // DOM is correct either way; only reload-persistence degrades.
@@ -6608,7 +6629,7 @@ function toggleMenu(open) {
   }
 
   async function loadChatHistory() {
-    const saved = sessionStorage.getItem(`chat-history-${botId}`);
+    const saved = storageGet('sessionStorage', `chat-history-${botId}`);
     if (!saved) {
       return;
     }
@@ -6625,7 +6646,7 @@ function toggleMenu(open) {
       if (!Array.isArray(items)) throw new Error('saved history is not an array');
     } catch (error) {
       console.error('Failed to load chat history:', error);
-      sessionStorage.removeItem(`chat-history-${botId}`);
+      storageRemove('sessionStorage', `chat-history-${botId}`);
       return;
     }
 
