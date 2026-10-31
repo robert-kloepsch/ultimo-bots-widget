@@ -160,13 +160,14 @@ function escapeHtmlStatic(value) {
 // null so the caller can degrade instead of navigating somewhere unintended.
 // Product URLs and image URLs arrive from the streamed catalog, i.e. from
 // outside the reviewed runtime, and are the reason this exists.
-function safeHttpUrl(value, { allowDataImage = false } = {}) {
+function safeHttpUrl(value, { allowDataImage = false, httpsOnly = false } = {}) {
   const v = String(value ?? '').trim();
   if (!v || /["'<>\\]/.test(v)) return null;
   if (allowDataImage && /^data:image\//i.test(v)) return v;
   try {
     const u = new URL(v, window.location.href);
-    return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : null;
+    if (u.protocol === 'https:') return u.href;
+    return (!httpsOnly && u.protocol === 'http:') ? u.href : null;
   } catch { return null; }
 }
 
@@ -6377,7 +6378,8 @@ function toggleMenu(open) {
 
     const imgWrap = document.createElement('div');
     imgWrap.className = 'ub-pc-img';
-    const imgSrc = safeHttpUrl(product.image_url, { allowDataImage: true });
+    // Pictures load without a click: https only (links may still be http).
+    const imgSrc = safeHttpUrl(product.image_url, { allowDataImage: true, httpsOnly: true });
     if (imgSrc) {
       const img = document.createElement('img');
       img.src = imgSrc;
