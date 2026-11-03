@@ -907,12 +907,35 @@ async function initializeChatWidget() {
       background-color: #0595d3;
       transform: translateY(-1.5px);
     }
-    /* Voice input: the microphone next to the send button, and the bar that takes the row's place while recording
-       (cancel, the live wave, done). */
+    /* Voice input: the microphone inside the input field on the right, and the bar that takes the row's place while
+       recording (cancel, the live wave, done). The field's frame moves to a wrapper (an inset shadow, so the height
+       stays 44px), the textarea keeps a transparent border; a long text scrolls left of the microphone. */
+    .saicf-input-field {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      min-width: 0;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: inset 0 0 0 1px #ccc;
+    }
+    .saicf-input-field:has(> textarea:disabled) { background: #f5f5f5; }
+    .saicf-chat-footer .saicf-input-field textarea,
+    .saicf-chat-footer .saicf-input-field textarea:disabled {
+      min-width: 0 !important;
+      padding-right: 2px !important;
+      border-color: transparent !important;
+      background: transparent !important;
+    }
     .saicf-input-send-container button.saicf-mic-btn {
+      flex: 0 0 auto;
       justify-content: center;
-      width: 44px;
+      width: 36px;
+      height: 36px;
+      min-height: 36px;
+      margin: 0 4px 4px 0;
       padding: 0;
+      border-radius: 50%;
       background: transparent;
       color: #6b6b76;
     }
@@ -923,8 +946,7 @@ async function initializeChatWidget() {
     }
     .saicf-mic-btn svg { width: 20px; height: 20px; }
     .saicf-mic-btn[disabled] { opacity: .45; cursor: not-allowed; }
-    .saicf-recording > .saicf-chat-input,
-    .saicf-recording > .saicf-mic-btn,
+    .saicf-recording > .saicf-input-field,
     .saicf-recording > .saicf-send-message { display: none !important; }
     .saicf-voice-bar {
       flex: 1;
@@ -963,7 +985,6 @@ async function initializeChatWidget() {
     .saicf-voice-bar.is-busy .saicf-voice-status {
       position: static; width: auto; height: auto; clip: auto; color: #666; font-size: 13px;
     }
-    .saicf-voice-bar.is-busy .saicf-voice-cancel { visibility: hidden; }
     .saicf-voice-bar.is-busy .saicf-voice-done svg { display: none; }
     .saicf-voice-bar.is-busy .saicf-voice-done::after {
       content: '';
@@ -2850,6 +2871,7 @@ async function initializeChatWidget() {
       <div class="saicf-predefined-container hidden"></div>
       ${poweredByHTML}
       <div class="saicf-input-send-container">
+        ${voiceInput ? '<div class="saicf-input-field">' : ''}
         <textarea class="saicf-chat-input" placeholder="${inputPlaceholder}" rows="1"></textarea>
         ${voiceInput ? `
         <button class="saicf-mic-btn" type="button" aria-label="${voiceText.start}" title="${voiceText.start}">
@@ -2857,6 +2879,7 @@ async function initializeChatWidget() {
             <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>
           </svg>
         </button>
+        </div>
         <div class="saicf-voice-bar" hidden>
           <button class="saicf-voice-cancel" type="button" aria-label="${voiceText.cancel}" title="${voiceText.cancel}">
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -3850,10 +3873,13 @@ function toggleMenu(open) {
     voiceDraw();
   }
 
+  // Also while transcribing: the request is dropped, the input keeps what was there.
   function voiceCancel() {
     if (!voice) return;
     const v = voice;
     voice = null;
+    v.cancelled = true;
+    if (v.abort) v.abort.abort();
     try {
       v.recorder.onstop = null;
       if (v.recorder.state !== 'inactive') v.recorder.stop();
@@ -3879,6 +3905,7 @@ function toggleMenu(open) {
         const form = new FormData();
         form.append('audio', blob, 'voice');
         const abort = new AbortController();
+        v.abort = abort;
         const timer = setTimeout(() => abort.abort(), 60000);
         const res = await fetch(
           `https://portal.ultimo-bots.com/api/voice/transcribe/${encodeURIComponent(botId)}?seconds=${seconds.toFixed(1)}`,
@@ -3886,6 +3913,7 @@ function toggleMenu(open) {
         if (res.ok) text = String((await res.json()).text || '').trim();
         if (res.ok || res.status === 400) notice = voiceText.nothing;
       } catch { /* the notice says it */ }
+      if (v.cancelled) return;
       if (voice === v) voice = null;
       voiceBarClose();
       if (!text) { voiceNotice(notice); chatInput.focus(); return; }
