@@ -2685,9 +2685,12 @@ async function initializeChatWidget() {
     </div>
   `;
 
-  // The badge goes through our counting redirect: one click per agent (no IP stored), then the /powered-by landing
-  // page in the browser's language, tagged so a signup from there is tied to this agent. (&amp;: it goes into HTML.)
-  const poweredByHref = `https://portal.ultimo-bots.com/api/acquisition/powered-by?bot=${encodeURIComponent(botId)}&amp;from=widget`;
+  // The badge's href stays our homepage, exactly as it always was: customers' sites carry it into the pages search
+  // engines read, and those links count for the homepage. A person's click goes through the counting redirect instead
+  // (one click per agent, no IP stored, then the /powered-by landing page in the browser's language, tagged so a signup
+  // from there is tied to this agent): the href is swapped the moment the click starts, before the browser follows it.
+  const POWERED_BY_HOME = 'https://www.ultimo-bots.com';
+  const poweredByTrack = `https://portal.ultimo-bots.com/api/acquisition/powered-by?bot=${encodeURIComponent(botId)}&from=widget`;
   const poweredByHTML = removePoweredBy
     ? (customBrandingText
       ? `
@@ -2699,7 +2702,7 @@ async function initializeChatWidget() {
     : `
         <div class="saicf-powered-by">
           <a class="saicf-powered-by-text"
-            href="${poweredByHref}"
+            href="${POWERED_BY_HOME}"
             target="_blank"
             rel="noopener"
             title="${promotingText}">
@@ -4709,6 +4712,13 @@ function toggleMenu(open) {
   chatWindow.addEventListener('pointerdown', () => {
     if (liveSessionStatus === 'agent_requested') primeArrivalChime();
   }, { passive: true });
+
+  // "Powered by Ultimo Bots": mouse (any button, so "open in new tab" too), touch and keyboard all start here.
+  const armPoweredBy = (e) => {
+    const a = e.target && e.target.closest && e.target.closest('a.saicf-powered-by-text');
+    if (a && a.getAttribute('href') === POWERED_BY_HOME) a.setAttribute('href', poweredByTrack);
+  };
+  ['mousedown', 'touchstart', 'keydown'].forEach((type) => chatWindow.addEventListener(type, armPoweredBy, { passive: true }));
 
   // ── Live chat: Heartbeat ──
   function startHeartbeat() {
