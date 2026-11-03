@@ -178,6 +178,39 @@ const PRE_CHAT_TEXT = {
         start: 'Rozpocznij czat', submitting: 'Wysyłanie…', anyLanguage: 'Możesz pisać do nas w dowolnym języku.' },
 };
 
+// Voice input (widget_configurations.voice_input, Boost and up; backend controller/voice_input.py): the texts of the
+// microphone and the recording bar, in the visitor's language like the pre-chat form.
+const VOICE_TEXT = {
+  en: { start: 'Speak your message', cancel: 'Cancel', done: 'Done', recording: 'Recording', working: 'Transcribing…',
+        blocked: 'Microphone access is blocked', nothing: 'Nothing heard, please try again', failed: 'Voice input is not available right now' },
+  de: { start: 'Nachricht einsprechen', cancel: 'Abbrechen', done: 'Fertig', recording: 'Aufnahme läuft', working: 'Wird umgewandelt…',
+        blocked: 'Mikrofon-Zugriff ist blockiert', nothing: 'Nichts gehört, bitte noch einmal versuchen', failed: 'Spracheingabe ist gerade nicht verfügbar' },
+  fr: { start: 'Dicter votre message', cancel: 'Annuler', done: 'Terminé', recording: 'Enregistrement', working: 'Transcription…',
+        blocked: 'L’accès au micro est bloqué', nothing: 'Rien entendu, veuillez réessayer', failed: 'La saisie vocale n’est pas disponible pour le moment' },
+  it: { start: 'Detta il tuo messaggio', cancel: 'Annulla', done: 'Fatto', recording: 'Registrazione', working: 'Trascrizione…',
+        blocked: 'L’accesso al microfono è bloccato', nothing: 'Non ho sentito nulla, riprova', failed: 'L’input vocale non è disponibile al momento' },
+  es: { start: 'Dicta tu mensaje', cancel: 'Cancelar', done: 'Listo', recording: 'Grabando', working: 'Transcribiendo…',
+        blocked: 'El acceso al micrófono está bloqueado', nothing: 'No se oyó nada, inténtalo de nuevo', failed: 'La entrada de voz no está disponible ahora' },
+  pt: { start: 'Dite a sua mensagem', cancel: 'Cancelar', done: 'Concluído', recording: 'A gravar', working: 'A transcrever…',
+        blocked: 'O acesso ao microfone está bloqueado', nothing: 'Nada ouvido, tente novamente', failed: 'A entrada de voz não está disponível agora' },
+  nl: { start: 'Spreek je bericht in', cancel: 'Annuleren', done: 'Klaar', recording: 'Opname loopt', working: 'Wordt omgezet…',
+        blocked: 'Toegang tot de microfoon is geblokkeerd', nothing: 'Niets gehoord, probeer het opnieuw', failed: 'Spraakinvoer is nu niet beschikbaar' },
+  pl: { start: 'Nagraj wiadomość', cancel: 'Anuluj', done: 'Gotowe', recording: 'Nagrywanie', working: 'Przetwarzanie…',
+        blocked: 'Dostęp do mikrofonu jest zablokowany', nothing: 'Nic nie usłyszano, spróbuj ponownie', failed: 'Wprowadzanie głosowe jest teraz niedostępne' },
+};
+
+// Recording needs a secure page, the MediaRecorder API and a page (or iframe) that may use the microphone; in-app
+// browsers and iframes without allow="microphone" fail here, and then the microphone is simply not shown.
+function voiceInputSupported() {
+  try {
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return false;
+    const policy = document.permissionsPolicy || document.featurePolicy;
+    return !(policy && policy.allowsFeature && !policy.allowsFeature('microphone'));
+  } catch {
+    return false;
+  }
+}
+
 // The visitor's first browser language the form knows, otherwise the page's <html lang>, otherwise English.
 function resolveVisitorLanguage() {
   const pick = (code) => {
@@ -874,6 +907,74 @@ async function initializeChatWidget() {
       background-color: #0595d3;
       transform: translateY(-1.5px);
     }
+    /* Voice input: the microphone next to the send button, and the bar that takes the row's place while recording
+       (cancel, the live wave, done). */
+    .saicf-input-send-container button.saicf-mic-btn {
+      justify-content: center;
+      width: 44px;
+      padding: 0;
+      background: transparent;
+      color: #6b6b76;
+    }
+    .saicf-input-send-container button.saicf-mic-btn:hover {
+      background-color: #f0f0f3 !important;
+      color: #2b2b33;
+      transform: none;
+    }
+    .saicf-mic-btn svg { width: 20px; height: 20px; }
+    .saicf-mic-btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .saicf-recording > .saicf-chat-input,
+    .saicf-recording > .saicf-mic-btn,
+    .saicf-recording > .saicf-send-message { display: none !important; }
+    .saicf-voice-bar {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      height: 44px;
+      padding: 0 4px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .saicf-voice-bar[hidden] { display: none; }
+    .saicf-input-send-container .saicf-voice-bar button {
+      flex: 0 0 auto;
+      justify-content: center;
+      align-self: center;
+      width: 34px;
+      height: 34px;
+      min-height: 34px;
+      margin: 0;
+      padding: 0;
+      border-radius: 50%;
+    }
+    .saicf-input-send-container .saicf-voice-bar button:hover { transform: none; }
+    .saicf-input-send-container button.saicf-voice-cancel { background: #f0f0f3; color: #4a4a55; }
+    .saicf-input-send-container button.saicf-voice-cancel:hover { background-color: #e4e4ea !important; }
+    .saicf-voice-bar button svg { width: 16px; height: 16px; }
+    .saicf-voice-wave { flex: 1; min-width: 0; height: 28px; }
+    .saicf-voice-status {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+    .saicf-voice-bar.is-busy .saicf-voice-wave { opacity: .3; }
+    .saicf-voice-bar.is-busy .saicf-voice-status {
+      position: static; width: auto; height: auto; clip: auto; color: #666; font-size: 13px;
+    }
+    .saicf-voice-bar.is-busy .saicf-voice-cancel { visibility: hidden; }
+    .saicf-voice-bar.is-busy .saicf-voice-done svg { display: none; }
+    .saicf-voice-bar.is-busy .saicf-voice-done::after {
+      content: '';
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, .45);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: saicf-voice-spin .8s linear infinite;
+    }
+    @keyframes saicf-voice-spin { to { transform: rotate(360deg); } }
     .saicf-message-row {
       display: flex;
       align-items: flex-start;
@@ -2487,6 +2588,9 @@ async function initializeChatWidget() {
   }
 
   const removePoweredBy     = widgetConfig.remove_powered_by       ?? false;
+  // The backend sends the effective value (switched on AND a plan from Boost up).
+  const voiceInput          = widgetConfig.voice_input === true && voiceInputSupported();
+  const voiceText           = VOICE_TEXT[String(resolveVisitorLanguage())] || VOICE_TEXT.en;
   const customBrandingText  = (widgetConfig.custom_branding_text || '').trim();
   const customBrandingTextHtml = customBrandingText
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -2747,6 +2851,22 @@ async function initializeChatWidget() {
       ${poweredByHTML}
       <div class="saicf-input-send-container">
         <textarea class="saicf-chat-input" placeholder="${inputPlaceholder}" rows="1"></textarea>
+        ${voiceInput ? `
+        <button class="saicf-mic-btn" type="button" aria-label="${voiceText.start}" title="${voiceText.start}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>
+          </svg>
+        </button>
+        <div class="saicf-voice-bar" hidden>
+          <button class="saicf-voice-cancel" type="button" aria-label="${voiceText.cancel}" title="${voiceText.cancel}">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+          <canvas class="saicf-voice-wave" aria-hidden="true"></canvas>
+          <span class="saicf-voice-status" role="status" aria-live="polite">${voiceText.recording}</span>
+          <button class="saicf-voice-done" type="button" aria-label="${voiceText.done}" title="${voiceText.done}" style="background-color:${themeColor};">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="${headerFontColor}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          </button>
+        </div>` : ''}
         <button class="saicf-send-message" style="background-color:${themeColor};" aria-label="Send message">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" style="width: 16px; height: 16px; fill: ${headerFontColor};">
             <path d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0L7 203.6c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 140.3V464c0 17.7 14.3 32 32 32s32-14.3 32-32V140.3l107.6 108.7c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L214.6 41.4z"/>
@@ -3032,6 +3152,7 @@ async function initializeChatWidget() {
   chatBodyWrapper.appendChild(scrollDownBtn);
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer textarea');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
+  const micBtn         = chatWindow.querySelector('.saicf-mic-btn');
   const ellipsisBtn    = chatWindow.querySelector('.saicf-ellipsis-btn');
   const actionsWrap    = chatWindow.querySelector('.saicf-header-actions');
   const menu           = chatWindow.querySelector('.saicf-menu');
@@ -3624,11 +3745,169 @@ function toggleMenu(open) {
     sendMessageBtn.disabled = b;
     chatInput.setAttribute('aria-disabled', String(b));
     sendMessageBtn.setAttribute('aria-disabled', String(b));
+    if (micBtn) micBtn.disabled = b;
 
     getPredefinedChips().forEach(chip => {
       chip.classList.toggle('is-disabled', b);
       chip.tabIndex = b ? -1 : 0;
       chip.setAttribute('aria-disabled', String(b));
+    });
+  }
+
+  // ── Voice input ──
+  // The microphone records (MediaRecorder), the bar shows the live wave, "done" sends the recording to the backend
+  // (controller/voice_input.py) and puts the text into the input field; the visitor reads it and sends it. At most
+  // two minutes per recording. The microphone is released as soon as the recording ends or the chat closes.
+  const VOICE_MAX_MS = 120000;
+  const inputRow = chatWindow.querySelector('.saicf-input-send-container');
+  const voiceBar = chatWindow.querySelector('.saicf-voice-bar');
+  let voice = null; // { stream, recorder, chunks, started, ctx, analyser, raf, timer, levels, finishing }
+
+  function voiceNotice(message) {
+    chatInput.placeholder = message;
+    clearTimeout(voiceNotice.timer);
+    voiceNotice.timer = setTimeout(() => { chatInput.placeholder = inputPlaceholder; }, 4000);
+  }
+
+  function voiceRelease(v) {
+    clearTimeout(v.timer);
+    cancelAnimationFrame(v.raf);
+    v.stream.getTracks().forEach((track) => track.stop());
+    if (v.ctx) v.ctx.close().catch(() => {});
+  }
+
+  function voiceBarClose() {
+    voiceBar.hidden = true;
+    voiceBar.classList.remove('is-busy');
+    voiceBar.querySelector('.saicf-voice-status').textContent = voiceText.recording;
+    inputRow.classList.remove('saicf-recording');
+  }
+
+  // A row of thin bars, newest on the right; a dot where it is quiet.
+  function voiceDraw() {
+    if (!voice) return;
+    const canvas = voiceBar.querySelector('.saicf-voice-wave');
+    const ratio = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth * ratio;
+    const height = canvas.clientHeight * ratio;
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+    if (voice.analyser) {
+      const samples = new Uint8Array(voice.analyser.fftSize);
+      voice.analyser.getByteTimeDomainData(samples);
+      let sum = 0;
+      for (let i = 0; i < samples.length; i += 1) sum += ((samples[i] - 128) / 128) ** 2;
+      voice.levels.push(Math.min(1, Math.sqrt(sum / samples.length) * 4));
+    } else {
+      voice.levels.push(0);
+    }
+    const step = 4 * ratio;
+    const count = Math.floor(width / step);
+    if (voice.levels.length > count) voice.levels.splice(0, voice.levels.length - count);
+    const g = canvas.getContext('2d');
+    g.clearRect(0, 0, width, height);
+    g.fillStyle = '#4a4a55';
+    voice.levels.forEach((level, i) => {
+      const h = Math.max(2 * ratio, level * height);
+      g.fillRect(width - (voice.levels.length - i) * step, (height - h) / 2, 2 * ratio, h);
+    });
+    voice.raf = requestAnimationFrame(voiceDraw);
+  }
+
+  async function voiceStart() {
+    if (voice || isBusy) return;
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch (err) {
+      voiceNotice(err && (err.name === 'NotAllowedError' || err.name === 'SecurityError') ? voiceText.blocked : voiceText.failed);
+      return;
+    }
+    const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm']
+      .find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      voiceNotice(voiceText.failed);
+      return;
+    }
+    voice = { stream, recorder, chunks: [], levels: [], started: Date.now() };
+    recorder.ondataavailable = (e) => { if (voice && e.data && e.data.size) voice.chunks.push(e.data); };
+    recorder.start(250);
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      voice.ctx = new Ctx();
+      voice.analyser = voice.ctx.createAnalyser();
+      voice.analyser.fftSize = 512;
+      voice.ctx.createMediaStreamSource(stream).connect(voice.analyser);
+    } catch { /* no wave, recording still works */ }
+    inputRow.classList.add('saicf-recording');
+    voiceBar.hidden = false;
+    voiceBar.querySelector('.saicf-voice-done').focus();
+    voice.timer = setTimeout(voiceFinish, VOICE_MAX_MS);
+    voiceDraw();
+  }
+
+  function voiceCancel() {
+    if (!voice) return;
+    const v = voice;
+    voice = null;
+    try {
+      v.recorder.onstop = null;
+      if (v.recorder.state !== 'inactive') v.recorder.stop();
+    } catch { /* already stopped */ }
+    voiceRelease(v);
+    voiceBarClose();
+  }
+
+  function voiceFinish() {
+    if (!voice || voice.finishing) return;
+    const v = voice;
+    v.finishing = true;
+    clearTimeout(v.timer);
+    v.recorder.onstop = async () => {
+      voiceRelease(v);
+      const seconds = (Date.now() - v.started) / 1000;
+      const blob = new Blob(v.chunks, { type: v.recorder.mimeType || (v.chunks[0] && v.chunks[0].type) || 'audio/webm' });
+      voiceBar.classList.add('is-busy');
+      voiceBar.querySelector('.saicf-voice-status').textContent = voiceText.working;
+      let text = '';
+      let notice = voiceText.failed;
+      try {
+        const form = new FormData();
+        form.append('audio', blob, 'voice');
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), 60000);
+        const res = await fetch(
+          `https://portal.ultimo-bots.com/api/voice/transcribe/${encodeURIComponent(botId)}?seconds=${seconds.toFixed(1)}`,
+          { method: 'POST', body: form, signal: abort.signal }).finally(() => clearTimeout(timer));
+        if (res.ok) text = String((await res.json()).text || '').trim();
+        if (res.ok || res.status === 400) notice = voiceText.nothing;
+      } catch { /* the notice says it */ }
+      if (voice === v) voice = null;
+      voiceBarClose();
+      if (!text) { voiceNotice(notice); chatInput.focus(); return; }
+      chatInput.value = chatInput.value.trim() ? `${chatInput.value.trimEnd()} ${text}` : text;
+      chatInput.dispatchEvent(new Event('input'));
+      chatInput.focus();
+      chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+    };
+    try {
+      if (v.recorder.state !== 'inactive') v.recorder.stop();
+      else v.recorder.onstop();
+    } catch {
+      v.recorder.onstop();
+    }
+  }
+
+  if (micBtn) {
+    micBtn.addEventListener('click', voiceStart);
+    voiceBar.querySelector('.saicf-voice-cancel').addEventListener('click', voiceCancel);
+    voiceBar.querySelector('.saicf-voice-done').addEventListener('click', voiceFinish);
+    voiceBar.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); voiceCancel(); }
     });
   }
 
@@ -5305,6 +5584,7 @@ function toggleMenu(open) {
   }
 
   function closeChat() {
+    voiceCancel(); // never keep the microphone open behind a closed chat
     chatWindow.classList.remove('show');
     gameCenter.setWindowOpen(false);
     chatWidgetIcon.classList.remove('hidden');
