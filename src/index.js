@@ -3785,6 +3785,9 @@ function toggleMenu(open) {
   const inputRow = chatWindow.querySelector('.saicf-input-send-container');
   const voiceBar = chatWindow.querySelector('.saicf-voice-bar');
   let voice = null; // { stream, recorder, chunks, started, ctx, analyser, raf, timer, levels, finishing }
+  // While the browser is still asking for the microphone a second click must not start a second recorder: it kept
+  // recording unseen and its data spoiled every later recording (03.11.2026).
+  let voiceStarting = false;
 
   function voiceNotice(message) {
     chatInput.placeholder = message;
@@ -3838,13 +3841,16 @@ function toggleMenu(open) {
   }
 
   async function voiceStart() {
-    if (voice || isBusy) return;
+    if (voice || voiceStarting || isBusy) return;
+    voiceStarting = true;
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     } catch (err) {
       voiceNotice(err && (err.name === 'NotAllowedError' || err.name === 'SecurityError') ? voiceText.blocked : voiceText.failed);
       return;
+    } finally {
+      voiceStarting = false;
     }
     const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm']
       .find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
@@ -3856,8 +3862,9 @@ function toggleMenu(open) {
       voiceNotice(voiceText.failed);
       return;
     }
-    voice = { stream, recorder, chunks: [], levels: [], started: Date.now() };
-    recorder.ondataavailable = (e) => { if (voice && e.data && e.data.size) voice.chunks.push(e.data); };
+    const v = { stream, recorder, chunks: [], levels: [], started: Date.now() };
+    voice = v;
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size) v.chunks.push(e.data); }; // its own recording only
     recorder.start(250);
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
