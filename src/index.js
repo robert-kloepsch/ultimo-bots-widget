@@ -2685,6 +2685,9 @@ async function initializeChatWidget() {
     </div>
   `;
 
+  // The badge goes through our counting redirect: one click per agent (no IP stored), then the /powered-by landing
+  // page in the browser's language, tagged so a signup from there is tied to this agent. (&amp;: it goes into HTML.)
+  const poweredByHref = `https://portal.ultimo-bots.com/api/acquisition/powered-by?bot=${encodeURIComponent(botId)}&amp;from=widget`;
   const poweredByHTML = removePoweredBy
     ? (customBrandingText
       ? `
@@ -2696,7 +2699,7 @@ async function initializeChatWidget() {
     : `
         <div class="saicf-powered-by">
           <a class="saicf-powered-by-text"
-            href="https://www.ultimo-bots.com"
+            href="${poweredByHref}"
             target="_blank"
             rel="noopener"
             title="${promotingText}">
