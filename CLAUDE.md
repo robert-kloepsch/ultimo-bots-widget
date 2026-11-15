@@ -16,14 +16,15 @@ renders a floating bubble + chat window inside a **Shadow DOM** on one host `<di
 |---|---|---|
 | Build | `npm run build` → [`webpack.config.js`](webpack.config.js) | `npm run build:release` → `webpack.release.js` |
 | Artifact | committed `dist/bundle.js` (unversioned) | `release/<version>/ultimo-widget.js` (gitignored, immutable per version) |
-| Served from | GitHub Pages, branch `main`: `https://robert-kloepsch.github.io/ultimo-bots-widget/dist/bundle.js` | repo `ultimo-bots-cdn` → `https://widget.ultimo-bots.com/<version>/ultimo-widget.js`, now **1.3.1** |
-| Loaded by | most customer sites: portal embed snippet (`ChannelGuide.js`, `integrationModal.js`), WordPress plugin, Shopify theme loader (`extensions/ultimo-chat/assets/ultimo-loader.js`), MCP embed code (`management.py`), webpage `_app.js`, docs `app/layout.tsx`; Wix via an embedded-script component (`wix.py`; its script URL is configured in the Wix app, not in code) | Webflow app installs: backend registers it with an SRI hash (`register_and_apply_widget` in `ultimo-bots-backend/src/controller/webflow.py`, `WIDGET_VERSION = "1.3.1"`, `WIDGET_INTEGRITY_HASH`) |
+| Served from | GitHub Pages, branch `main`: `https://robert-kloepsch.github.io/ultimo-bots-widget/dist/bundle.js` | repo `ultimo-bots-cdn` → `https://widget.ultimo-bots.com/<version>/ultimo-widget.js`, now **1.3.2** |
+| Loaded by | most customer sites: portal embed snippet (`ChannelGuide.js`, `integrationModal.js`), WordPress plugin, Shopify theme loader (`extensions/ultimo-chat/assets/ultimo-loader.js`), MCP embed code (`management.py`), webpage `_app.js`, docs `app/layout.tsx`; Wix via an embedded-script component (`wix.py`; its script URL is configured in the Wix app, not in code) | Webflow app installs: backend registers it with an SRI hash (`register_and_apply_widget` in `ultimo-bots-backend/src/controller/webflow.py`, `WIDGET_VERSION = "1.3.2"`, `WIDGET_INTEGRITY_HASH`) |
 | Deploy | **a push to `main` IS the deploy.** No CI, no tests, no rollback beyond revert + push | new CDN directory + backend constants in lockstep |
 
 - The live bundle equals `origin/main:dist/bundle.js` (verified 2026-10-20).
 - The branches **diverged at `7bcac4f`** (2026-08-18). Only on `main`: the pre-chat form in the visitor's
-  language (`9fbe658`, built in `2c9da35`). Only on `webflow-1.3.0`: the Webflow-review hardening and
-  releases 1.2.0–1.3.1. Merging them is a **separate, owner-approved task** — never merge or cherry-pick
+  language (`9fbe658`), live chat across tabs and visits (`db76c5e`), the waiting-game leaderboard, voice
+  input, the counting "Powered by" redirect, and the embed staying idle next to the hosted release
+  (`187f179`). Only on `webflow-1.3.0`: the Webflow-review hardening and releases 1.2.0–1.3.2. Merging them is a **separate, owner-approved task** — never merge or cherry-pick
   between them on your own.
 - Pushing `main` or `ultimo-bots-cdn` is a **production change**: the owner's explicit approval first.
 - **Never run `npm run build:release` on `main`.** Main's `package.json` is still `1.0.0` and its
@@ -34,19 +35,20 @@ renders a floating bubble + chat window inside a **Shadow DOM** on one host `<di
 
 ## Stack (`main`)
 
-- **Vanilla JS**, one file [`src/index.js`](src/index.js) (6,337 lines) plus [`src/games/`](src/games/).
+- **Vanilla JS**, one file [`src/index.js`](src/index.js) (7,112 lines) plus [`src/games/`](src/games/).
 - **webpack 5**, `mode: 'production'` ([`webpack.config.js:19`](webpack.config.js)), `clean: true`. Output
-  `dist/bundle.js` is minified, ~208 KB (212,780 bytes), no source map.
-- **Bundled deps:** `marked 11.1.1` + `dompurify 3.1.6` (lockfile), statically imported, no runtime CDN
-  imports. On `main` they are also written to `globalThis.marked` / `globalThis.DOMPurify` (`src/index.js:9–10`).
-- **Shadow DOM** (`attachShadow`, `src/index.js:366`) + `:host { all: initial }`; class prefix **`saicf-*`**
+  `dist/bundle.js` is minified, ~241 KB (246,533 bytes), no source map.
+- **Bundled deps:** `marked 11.1.1` + `dompurify 3.4.17` (lockfile), statically imported, no runtime CDN
+  imports. On `main` they are also written to `globalThis.marked` / `globalThis.DOMPurify` when the page has
+  no copy of its own (`src/index.js:9–10`).
+- **Shadow DOM** (`attachShadow`, `src/index.js:418`) + `:host { all: initial }`; class prefix **`saicf-*`**
   (legacy, keep it); npm name `swiss_bot_widget` (legacy, ignore).
 - **Backend URLs hardcoded** to `https://portal.ultimo-bots.com/api/…` and `wss://portal.ultimo-bots.com/api/ws`.
 
 ## Build, test, deploy (`main`)
 
 ```bash
-npm ci            # node_modules may come from webflow-1.3.0 (DOMPurify 3.4.13); ci restores main's lockfile
+npm ci            # node_modules may come from webflow-1.3.0; ci restores main's lockfile
 npm run build     # = webpack → dist/bundle.js, bundle.js.LICENSE.txt, index.html, cloud.png
 ```
 
@@ -61,23 +63,25 @@ npm run build     # = webpack → dist/bundle.js, bundle.js.LICENSE.txt, index.h
 
 ---
 
-## Where things are in `src/index.js` (`main` @ `2c9da35`)
+## Where things are in `src/index.js` (`main` @ `57e41df`)
 
 | Lines | What |
 |---|---|
 | 1–20 | imports, globals, `OWN_SCRIPT_BOT_ID` (bot id from our own `<script data-bot_id>`) |
-| 22 / 134 / 158 | `FONT_SOURCES`; AI disclosure (EU AI Act Art. 50(1)); pre-chat texts in 8 languages |
-| 210–267 | bootstrap (below) |
-| 269 | `initializeChatWidget` starts (its body runs to the end of the file): 328–348 host container style (`display: 'block'` at 340), 366 shadow root, 369–385 `body.no-scroll` style in `<head>` |
-| ~2376–2470 | config load: `widget_configuration`, `warm_lead_function`, live-chat settings + agent availability |
-| 3597–~4730 | **live-agent state machine**: `connectLiveWs` 3674, heartbeat 4427, polling 4499, visibility 4619 |
-| 4882 | `sendMessage`; AI answer stream = `EventSource` GET `chatbot_response?user_input=…` (5004) |
-| 5197–~6000 | product gallery + Shopify add-to-cart (`pc*`); 6009 activity timeline; 6186/6230 chat history |
+| 22 / 134 / 158 / 181 | `FONT_SOURCES`; AI disclosure (EU AI Act Art. 50(1)); pre-chat texts in 8 languages; voice-input texts |
+| 243–319 | bootstrap (below) |
+| 321 | `initializeChatWidget` starts (its body runs to the end of the file): 380–400 host container style (`display: 'block'` at 392), 418 shadow root, 422–437 `body.no-scroll` style in `<head>` |
+| ~2517–2610 | config load: `widget_configuration`, `warm_lead_function`, live-chat settings + agent availability |
+| 3982–~5550 | conversation storage (3982), then the **live-agent state machine**: `connectLiveWs` 4134, heartbeat 5037, polling 5116, visibility 5390 |
+| 5653 | `sendMessage`; AI answer stream = `EventSource` GET `chatbot_response?user_input=…` (5743) |
+| 5971–~6780 | product gallery + Shopify add-to-cart (`pc*`); 6783 activity timeline; 6960/7005 chat history |
 
 Backend contract markers in comments: `W1`–`W17`, `join_ack`, `rejoin races`.
 
-## Bootstrap (`src/index.js:210–267`)
+## Bootstrap (`src/index.js:243–319`)
 
+0. A script from `widget.ultimo-bots.com/<version>/ultimo-widget.js` on the page (the Webflow App's release)
+   → this embed stays idle.
 1. Look for `<div id="chat-widget-container" data-user-id="…">`.
 2. Webflow hosted-script path: no container, but our own `<script>` carries `data-bot_id` → create the container.
 3. Otherwise poll every 200 ms **and** watch `document.body` with a `MutationObserver` (armed on
@@ -113,29 +117,35 @@ mirrored in the frontend. Dev harness: `src/games/harness.html` (header explains
 - **`marked` / DOMPurify stay bundled** — never reintroduce runtime CDN imports (Webflow Marketplace
   rejected that delivery chain in 2026-07). `ensureMarked()` / `loadDompurify()` are awaited no-ops.
 - **`pointer-events: none` on the host**; visible elements opt back in.
-- **Never drop `display: 'block'` from the host's inline style** (`src/index.js:340`), and keep it without
+- **Never drop `display: 'block'` from the host's inline style** (`src/index.js:392`), and keep it without
   `!important`. The host has no light-DOM children, so it matches `div:empty`; Shopify Dawn's
   `div:empty { display: none }` hid the whole widget, silently (fixed 2026-08-09). Triage: every node measures
   `0x0` while computed styles look normal → look at the host, not the launcher.
 - **Full backend URLs only** (the widget runs on customer domains). **`z-index: 2147483647`** stays.
 - **Per-bot storage keys** (`{key}-{botId}`).
-- **No "chatbot" in default copy.** Debt: default `promotingText` (`src/index.js:2376`) and the
-  `bot_not_found` text (4999).
+- **No "chatbot" in default copy.** Debt: default `promotingText` (`src/index.js:2517`) and the
+  `bot_not_found` text (5773).
 
 ## Storage keys (per bot, on the host page's origin)
 
 | Key | Storage | Purpose |
 |---|---|---|
-| `sessionId-{botId}` | sessionStorage | conversation id |
-| `ultimo_live_session_token-{botId}` | sessionStorage | live-chat session token |
-| `chat-history-{botId}` | sessionStorage | rendered transcript snapshot, restored on reload |
+| `sessionId-{botId}` | localStorage* | conversation id |
+| `ultimo_live_session_token-{botId}` | localStorage* | live-chat session token |
+| `chat-history-{botId}` | localStorage* | rendered transcript snapshot, restored on reload |
+| `ultimo_live_last_agent_msg-{botId}` | localStorage* | id of the last agent message seen |
+| `ultimo_conv_active-{botId}` | localStorage* | time of the last activity |
+| `ultimo_live_resume-{botId}` | localStorage* | resume secret for `/api/live/resume` on a later visit |
+| `ultimo_live_chime-{botId}` | localStorage | one chime for all tabs |
 | `saicf-popup-seen-{botId}` | sessionStorage | proactive pop-up shown once per session |
 | `saicf-prechat-completed-{botId}` | localStorage | pre-chat form completed |
 
+\* Shared by every tab of the site (`src/index.js:3982`); a conversation ends 30 minutes after the last
+activity unless the team replied since, then it continues on the next visit for up to 30 days. With
+localStorage blocked these fall back to sessionStorage.
+
 ## Known traps
 
-- **Stale `node_modules` changes the bundle.** Building `main` with webflow-1.3.0's `node_modules` bundles
-  DOMPurify 3.4.13 instead of 3.1.6 → `npm ci` first.
 - **No tests, no source map, no SRI on `main`.** A bad push ships instantly to every non-Webflow customer.
 - **`src/widget.css` is dead** (runtime CSS is a template string in `index.js`).
 - **`src/home|about|services|contact.html`** are leftover demo pages, unused.
@@ -148,7 +158,7 @@ mirrored in the frontend. Dev harness: `src/games/harness.html` (header explains
 Read-only from `main`: `git show webflow-1.3.0:<path>`. That branch's own `CLAUDE.md` still has the old
 `../docs/` links and some pre-divergence claims; this section is the checked summary (2026-10-20).
 
-- **What only it has** (none of this is on `main`): DOMPurify 3.4.13, module-scoped libraries (no page
+- **What only it has** (none of this is on `main`): module-scoped libraries (no page
   globals); the `window.__ULTIMO_BOTS__` mount registry with `destroy(botId?)`, rolled back when the config
   load aborts the mount; config strings sanitised (`escapeHtml`, `safeCssColor`, `safeAssetUrl`,
   `safeNumber`); AI stream as `fetch` POST with manual SSE parsing; `X-Live-Session-Token` header instead of
@@ -163,7 +173,7 @@ Read-only from `main`: `git show webflow-1.3.0:<path>`. That branch's own `CLAUD
 - **Release flow** (each push is production → owner approval): bump `package.json` version (never reuse
   one) → `npm ci` → `gate:static`, `build:release`, `gate:runtime`, `gate:claims` → copy `release/<v>/` to
   `../ultimo-bots-cdn/<v>/`, record the SRI in its README, push → set `WIDGET_VERSION` / `WIDGET_INTEGRITY_HASH`
-  in `webflow.py` (1.3.1 uses `sha256-…`) → deploy backend → `gate:provenance` (and so `npm run gate`) green.
+  in `webflow.py` (1.3.2 uses `sha256-…`) → deploy backend → `gate:provenance` (and so `npm run gate`) green.
 - That branch's committed `dist/bundle.js` is still the pre-divergence `7bcac4f` build; never publish it.
 
 ## Where to go next
