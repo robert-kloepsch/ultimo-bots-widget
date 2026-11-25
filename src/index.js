@@ -199,6 +199,55 @@ const VOICE_TEXT = {
         blocked: 'Dostęp do mikrofonu jest zablokowany', nothing: 'Nic nie usłyszano, spróbuj ponownie', failed: 'Wprowadzanie głosowe jest teraz niedostępne' },
 };
 
+// Files and images in the chat (widget_configurations.attachments_enabled, Boost and up; backend
+// controller/chat_attachments/): the paperclip, the files waiting above the field and what can go wrong, in the
+// visitor's language. `notice` stands under the waiting files unless the owner wrote their own.
+const FILE_TEXT = {
+  en: { attach: 'Attach a photo or PDF', remove: 'Remove', uploading: 'Uploading…', image: 'Image', document: 'Document',
+        notice: 'Files are read by AI to answer you. Please don’t send sensitive documents.',
+        too_large: 'This file is too large.', unsupported_type: 'Only photos (JPEG, PNG, WebP) and PDF files.',
+        too_many: 'Up to 3 files per message.', limit: 'Too many files for now. Please try again later.',
+        off: 'Files can’t be sent here.', failed: 'Upload failed. Please try again.' },
+  de: { attach: 'Foto oder PDF anhängen', remove: 'Entfernen', uploading: 'Wird hochgeladen…', image: 'Bild', document: 'Dokument',
+        notice: 'Dateien werden von KI gelesen, um dir zu antworten. Bitte schick keine sensiblen Dokumente.',
+        too_large: 'Diese Datei ist zu groß.', unsupported_type: 'Nur Fotos (JPEG, PNG, WebP) und PDF-Dateien.',
+        too_many: 'Bis zu 3 Dateien pro Nachricht.', limit: 'Gerade zu viele Dateien. Bitte versuch es später noch einmal.',
+        off: 'Hier können keine Dateien gesendet werden.', failed: 'Hochladen fehlgeschlagen. Bitte noch einmal versuchen.' },
+  fr: { attach: 'Joindre une photo ou un PDF', remove: 'Retirer', uploading: 'Envoi…', image: 'Image', document: 'Document',
+        notice: 'Les fichiers sont lus par une IA pour vous répondre. N’envoyez pas de documents sensibles.',
+        too_large: 'Ce fichier est trop volumineux.', unsupported_type: 'Uniquement des photos (JPEG, PNG, WebP) et des PDF.',
+        too_many: 'Jusqu’à 3 fichiers par message.', limit: 'Trop de fichiers pour le moment. Réessayez plus tard.',
+        off: 'Impossible d’envoyer des fichiers ici.', failed: 'L’envoi a échoué. Veuillez réessayer.' },
+  it: { attach: 'Allega foto o PDF', remove: 'Rimuovi', uploading: 'Caricamento…', image: 'Immagine', document: 'Documento',
+        notice: 'I file vengono letti da un’IA per risponderti. Non inviare documenti sensibili.',
+        too_large: 'Questo file è troppo grande.', unsupported_type: 'Solo foto (JPEG, PNG, WebP) e file PDF.',
+        too_many: 'Fino a 3 file per messaggio.', limit: 'Troppi file per ora. Riprova più tardi.',
+        off: 'Qui non è possibile inviare file.', failed: 'Caricamento non riuscito. Riprova.' },
+  es: { attach: 'Adjuntar foto o PDF', remove: 'Quitar', uploading: 'Subiendo…', image: 'Imagen', document: 'Documento',
+        notice: 'Una IA lee los archivos para responderte. No envíes documentos sensibles.',
+        too_large: 'Este archivo es demasiado grande.', unsupported_type: 'Solo fotos (JPEG, PNG, WebP) y archivos PDF.',
+        too_many: 'Hasta 3 archivos por mensaje.', limit: 'Demasiados archivos por ahora. Inténtalo más tarde.',
+        off: 'Aquí no se pueden enviar archivos.', failed: 'La subida falló. Inténtalo de nuevo.' },
+  pt: { attach: 'Anexar foto ou PDF', remove: 'Remover', uploading: 'A enviar…', image: 'Imagem', document: 'Documento',
+        notice: 'Os ficheiros são lidos por IA para lhe responder. Não envie documentos sensíveis.',
+        too_large: 'Este ficheiro é demasiado grande.', unsupported_type: 'Apenas fotos (JPEG, PNG, WebP) e ficheiros PDF.',
+        too_many: 'Até 3 ficheiros por mensagem.', limit: 'Demasiados ficheiros por agora. Tente mais tarde.',
+        off: 'Aqui não é possível enviar ficheiros.', failed: 'O envio falhou. Tente novamente.' },
+  nl: { attach: 'Foto of pdf bijvoegen', remove: 'Verwijderen', uploading: 'Uploaden…', image: 'Afbeelding', document: 'Document',
+        notice: 'Bestanden worden door AI gelezen om je te antwoorden. Stuur geen gevoelige documenten.',
+        too_large: 'Dit bestand is te groot.', unsupported_type: 'Alleen foto’s (JPEG, PNG, WebP) en pdf-bestanden.',
+        too_many: 'Maximaal 3 bestanden per bericht.', limit: 'Te veel bestanden op dit moment. Probeer het later opnieuw.',
+        off: 'Hier kunnen geen bestanden worden verstuurd.', failed: 'Uploaden mislukt. Probeer het opnieuw.' },
+  pl: { attach: 'Dołącz zdjęcie lub PDF', remove: 'Usuń', uploading: 'Przesyłanie…', image: 'Obraz', document: 'Dokument',
+        notice: 'Pliki są odczytywane przez AI, aby ci odpowiedzieć. Nie wysyłaj poufnych dokumentów.',
+        too_large: 'Ten plik jest za duży.', unsupported_type: 'Tylko zdjęcia (JPEG, PNG, WebP) i pliki PDF.',
+        too_many: 'Maksymalnie 3 pliki w wiadomości.', limit: 'Za dużo plików. Spróbuj ponownie później.',
+        off: 'Tutaj nie można wysyłać plików.', failed: 'Przesyłanie nie powiodło się. Spróbuj ponownie.' },
+};
+const FILE_MAX_PER_MESSAGE = 3;
+const FILE_MAX_IMAGE_EDGE = 1600;      // the visitor's browser shrinks photos before the upload (the server does too)
+const FILE_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
 // Recording needs a secure page, the MediaRecorder API and a page (or iframe) that may use the microphone; in-app
 // browsers and iframes without allow="microphone" fail here, and then the microphone is simply not shown.
 function voiceInputSupported() {
@@ -945,6 +994,28 @@ async function initializeChatWidget() {
       transform: none;
     }
     .saicf-mic-btn svg { width: 20px; height: 20px; }
+    .saicf-input-send-container button.saicf-attach-btn { margin-right: 0; }
+    /* Files waiting above the field (chat_attachments): a small chip each, then the note */
+    .saicf-file-tray { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 6px; }
+    .saicf-file-tray[hidden] { display: none; }
+    .saicf-file-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 3px 4px 3px 3px;
+      border: 1px solid #e2e2e8; border-radius: 10px; background: #fff; font-size: 12px; color: #2b2b33; pointer-events: auto; }
+    .saicf-file-chip img, .saicf-file-chip .saicf-file-doc { width: 34px; height: 34px; border-radius: 7px; object-fit: cover;
+      flex: 0 0 auto; }
+    .saicf-file-chip .saicf-file-doc { display: inline-flex; align-items: center; justify-content: center; background: #f0f0f3;
+      color: #5b5b66; font-weight: 700; font-size: 10px; }
+    .saicf-file-chip span.saicf-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .saicf-file-chip.is-uploading { opacity: .65; }
+    .saicf-file-chip.is-error { border-color: #f0b4b4; color: #a32020; }
+    .saicf-file-chip button { border: none; background: transparent; color: #6b6b76; cursor: pointer; font-size: 16px;
+      line-height: 1; padding: 0 4px; height: auto; min-height: 0; }
+    .saicf-file-chip button:hover { color: #2b2b33; transform: none; background: transparent !important; }
+    .saicf-file-note { flex-basis: 100%; font-size: 11px; color: #75757f; line-height: 1.35; }
+    .saicf-sent-files { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-bottom: 4px; }
+    .saicf-sent-files img { width: 120px; height: 90px; object-fit: cover; border-radius: 10px; display: block; }
+    .saicf-sent-files .saicf-sent-doc { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+      border-radius: 10px; background: rgba(255,255,255,.22); font-size: 13px; }
+    .saicf-chat-window.saicf-drop-active .saicf-chat-footer { box-shadow: inset 0 0 0 2px #8a8a96; }
     .saicf-mic-btn[disabled] { opacity: .45; cursor: not-allowed; }
     .saicf-recording > .saicf-input-field,
     .saicf-recording > .saicf-send-message { display: none !important; }
@@ -2612,6 +2683,11 @@ async function initializeChatWidget() {
   // The backend sends the effective value (switched on AND a plan from Boost up).
   const voiceInput          = widgetConfig.voice_input === true && voiceInputSupported();
   const voiceText           = VOICE_TEXT[String(resolveVisitorLanguage())] || VOICE_TEXT.en;
+  // Files in the chat: the backend sends the effective value (switched on AND a plan from Boost up).
+  const filesOn             = widgetConfig.attachments_enabled === true;
+  const fileText            = FILE_TEXT[String(resolveVisitorLanguage())] || FILE_TEXT.en;
+  const fileNoticeText      = String(widgetConfig.attachments_notice || '').trim() || fileText.notice;
+  const inputField          = voiceInput || filesOn;
   const customBrandingText  = (widgetConfig.custom_branding_text || '').trim();
   const customBrandingTextHtml = customBrandingText
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -2870,16 +2946,25 @@ async function initializeChatWidget() {
       </div>` : ''}
       <div class="saicf-predefined-container hidden"></div>
       ${poweredByHTML}
+      ${filesOn ? '<div class="saicf-file-tray" hidden></div>' : ''}
       <div class="saicf-input-send-container">
-        ${voiceInput ? '<div class="saicf-input-field">' : ''}
+        ${inputField ? '<div class="saicf-input-field">' : ''}
         <textarea class="saicf-chat-input" placeholder="${inputPlaceholder}" rows="1"></textarea>
+        ${filesOn ? `
+        <button class="saicf-mic-btn saicf-attach-btn" type="button" aria-label="${fileText.attach}" title="${fileText.attach}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+        <input class="saicf-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/*,application/pdf" multiple hidden>` : ''}
         ${voiceInput ? `
         <button class="saicf-mic-btn" type="button" aria-label="${voiceText.start}" title="${voiceText.start}">
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>
           </svg>
-        </button>
-        </div>
+        </button>` : ''}
+        ${inputField ? '</div>' : ''}
+        ${voiceInput ? `
         <div class="saicf-voice-bar" hidden>
           <button class="saicf-voice-cancel" type="button" aria-label="${voiceText.cancel}" title="${voiceText.cancel}">
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -3175,13 +3260,197 @@ async function initializeChatWidget() {
   chatBodyWrapper.appendChild(scrollDownBtn);
   const chatInput      = chatWindow.querySelector('.saicf-chat-footer textarea');
   const sendMessageBtn = chatWindow.querySelector('.saicf-send-message');
-  const micBtn         = chatWindow.querySelector('.saicf-mic-btn');
+  const micBtn         = chatWindow.querySelector('.saicf-mic-btn:not(.saicf-attach-btn)');
   const ellipsisBtn    = chatWindow.querySelector('.saicf-ellipsis-btn');
   const actionsWrap    = chatWindow.querySelector('.saicf-header-actions');
   const menu           = chatWindow.querySelector('.saicf-menu');
   const clearBtn       = chatWindow.querySelector('.saicf-menu-item--clear');
   const configLoading  = chatWindow.querySelector('.saicf-config-loading');
   const aiDisclosure   = chatWindow.querySelector('.saicf-ai-disclosure');
+
+  // ── Files in the chat (FILE_TEXT; backend controller/chat_attachments/) ──────────────────────────────────────
+  // The paperclip (and paste / drop) picks photos and PDFs; photos are shrunk in the browser first. Each file goes
+  // up at once (POST /api/chat-attachments/upload/{bot}, bound to this conversation) and waits above the field
+  // with a small preview; the message then names only the files' ids. Nothing we store has a public address: the
+  // visitor's preview is local, the sent message keeps a tiny thumbnail for the restored transcript.
+  const fileTray  = chatWindow.querySelector('.saicf-file-tray');
+  const attachBtn = chatWindow.querySelector('.saicf-attach-btn');
+  const fileInput = chatWindow.querySelector('.saicf-file-input');
+  let pendingFiles = [];
+  const FILE_ERRORS = { unsupported_type: 'unsupported_type', too_large: 'too_large', too_many_pixels: 'too_large',
+    too_many: 'too_many', limit: 'limit', storage_full: 'limit', attachments_off: 'off' };
+
+  function fileEsc(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderFileTray() {
+    if (!fileTray) return;
+    if (!pendingFiles.length) { fileTray.hidden = true; fileTray.innerHTML = ''; return; }
+    fileTray.hidden = false;
+    fileTray.innerHTML = pendingFiles.map((f) => {
+      const preview = f.thumb ? `<img src="${fileEsc(f.thumb)}" alt="">` : `<span class="saicf-file-doc">${f.kind === 'image' ? 'IMG' : 'PDF'}</span>`;
+      const label = f.status === 'uploading' ? fileText.uploading : f.status === 'error' ? f.error : f.name;
+      return `<div class="saicf-file-chip is-${f.status}" data-local="${fileEsc(f.localId)}" title="${fileEsc(label)}">${preview}` +
+        `<span class="saicf-file-name">${fileEsc(label)}</span>` +
+        `<button type="button" aria-label="${fileEsc(fileText.remove)}" data-remove="${fileEsc(f.localId)}">×</button></div>`;
+    }).join('') + `<div class="saicf-file-note">${fileEsc(fileNoticeText)}</div>`;
+  }
+
+  function clearPendingFiles() {
+    pendingFiles = [];
+    renderFileTray();
+  }
+
+  function shrinkImage(file) {
+    return new Promise((resolve) => {
+      let url;
+      try { url = URL.createObjectURL(file); } catch { resolve({ blob: file, thumb: null }); return; }
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth, h = img.naturalHeight;
+          const scale = Math.min(1, FILE_MAX_IMAGE_EDGE / Math.max(w, h));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(w * scale));
+          c.height = Math.max(1, Math.round(h * scale));
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          const t = document.createElement('canvas');
+          const ts = Math.min(1, 240 / Math.max(w, h));
+          t.width = Math.max(1, Math.round(w * ts));
+          t.height = Math.max(1, Math.round(h * ts));
+          const tctx = t.getContext('2d');
+          tctx.fillStyle = '#fff';
+          tctx.fillRect(0, 0, t.width, t.height);
+          tctx.drawImage(img, 0, 0, t.width, t.height);
+          const thumb = t.toDataURL('image/jpeg', 0.7);
+          c.toBlob((blob) => {
+            URL.revokeObjectURL(url);
+            resolve({ blob: blob || file, thumb });
+          }, 'image/jpeg', 0.85);
+        } catch {
+          URL.revokeObjectURL(url);
+          resolve({ blob: file, thumb: null });
+        }
+      };
+      // a format the browser cannot show (e.g. HEIC): sent as it is, the server says whether it can read it
+      img.onerror = () => { URL.revokeObjectURL(url); resolve({ blob: file, thumb: null }); };
+      img.src = url;
+    });
+  }
+
+  async function uploadPendingFile(entry, blob, name) {
+    const form = new FormData();
+    form.append('file', blob, name);
+    form.append('session_id', sessionId);
+    form.append('platform', 'website');
+    try {
+      const res = await fetch(`https://portal.ultimo-bots.com/api/chat-attachments/upload/${encodeURIComponent(botId)}`, {
+        method: 'POST', body: form, credentials: 'omit',
+      });
+      let data = {};
+      try { data = await res.json(); } catch { /* not JSON */ }
+      if (res.ok && data.status === 'ready' && data.id) {
+        entry.status = 'ready';
+        entry.id = data.id;
+      } else {
+        entry.status = 'error';
+        const key = FILE_ERRORS[data.reason || data.detail] ||
+          (res.status === 403 ? 'off' : res.status === 429 ? 'limit' : res.status === 413 ? 'too_large' : 'failed');
+        entry.error = fileText[key] || fileText.failed;
+      }
+    } catch {
+      entry.status = 'error';
+      entry.error = fileText.failed;
+    }
+    renderFileTray();
+  }
+
+  function addFiles(list) {
+    if (!filesOn || !list) return;
+    const files = Array.from(list);
+    for (const file of files) {
+      if (pendingFiles.length >= FILE_MAX_PER_MESSAGE) {
+        pendingFiles.push({ localId: `f${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: file.name,
+          kind: 'document', status: 'error', error: fileText.too_many });
+        break;
+      }
+      const isImage = /^image\//.test(file.type || '');
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+      const entry = { localId: `f${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: file.name || fileText.image,
+        kind: isImage ? 'image' : 'document', status: 'uploading', thumb: null };
+      pendingFiles.push(entry);
+      if (!isImage && !isPdf) {
+        entry.status = 'error';
+        entry.error = fileText.unsupported_type;
+        continue;
+      }
+      if (isPdf && file.size > FILE_MAX_DOCUMENT_BYTES) {
+        entry.status = 'error';
+        entry.error = fileText.too_large;
+        continue;
+      }
+      (async () => {
+        if (isImage) {
+          const shrunk = await shrinkImage(file);
+          entry.thumb = shrunk.thumb;
+          renderFileTray();
+          const base = String(file.name || 'photo').replace(/\.[^.]+$/, '') || 'photo';
+          await uploadPendingFile(entry, shrunk.blob, shrunk.blob === file ? file.name : `${base}.jpg`);
+        } else {
+          await uploadPendingFile(entry, file, file.name);
+        }
+      })();
+    }
+    renderFileTray();
+  }
+
+  if (filesOn && attachBtn && fileInput) {
+    attachBtn.addEventListener('click', () => { if (!isBusy) fileInput.click(); });
+    fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+    fileTray.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('[data-remove]') : null;
+      if (!btn) return;
+      pendingFiles = pendingFiles.filter((f) => f.localId !== btn.getAttribute('data-remove'));
+      renderFileTray();
+    });
+    chatInput.addEventListener('paste', (e) => {
+      const files = e.clipboardData && e.clipboardData.files;
+      if (files && files.length) {
+        addFiles(files);
+        if (!(e.clipboardData.getData('text') || '').trim()) e.preventDefault();
+      }
+    });
+    chatWindow.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+        e.preventDefault();
+        chatWindow.classList.add('saicf-drop-active');
+      }
+    });
+    chatWindow.addEventListener('dragleave', (e) => {
+      if (!chatWindow.contains(e.relatedTarget)) chatWindow.classList.remove('saicf-drop-active');
+    });
+    chatWindow.addEventListener('drop', (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      chatWindow.classList.remove('saicf-drop-active');
+      addFiles(e.dataTransfer.files);
+    });
+  }
+
+  // The sent files above the visitor's text (a small thumbnail stays in the restored transcript).
+  function attachSentFiles(row, files) {
+    const bubble = row && row.querySelector('.saicf-widget-message');
+    if (!bubble || !files.length) return;
+    const html = files.map((f) => (f.thumb
+      ? `<img src="${fileEsc(f.thumb)}" alt="${fileEsc(f.name)}">`
+      : `<span class="saicf-sent-doc">${fileEsc(f.kind === 'image' ? fileText.image : fileText.document)}: ${fileEsc(f.name)}</span>`)).join('');
+    bubble.insertAdjacentHTML('afterbegin', `<div class="saicf-sent-files">${html}</div>`);
+  }
 
   // The visitor may dismiss the notice (by then they have been informed, which
   // is what Art. 50(1) asks for); the customer may not. Kept in memory only, so
@@ -3437,6 +3706,7 @@ function toggleMenu(open) {
     convRemove(CONV_RESUME_KEY);
     sessionId = generateSessionId();
     convSet(CONV_SESSION_KEY, sessionId);
+    clearPendingFiles();  // the files belonged to the old conversation
 
     // W17: Don't restart heartbeat for new session — wait for first message
     liveHeartbeatStarted = false;
@@ -5654,7 +5924,12 @@ function toggleMenu(open) {
     if (isBusy) return;
 
     const message = chatInput.value.trim();
-    if (!message) return;
+    // files waiting above the field (chat_attachments): sent with the message, also without words
+    if (filesOn && pendingFiles.some((f) => f.status === 'uploading')) return;
+    const sendFiles = filesOn ? pendingFiles.filter((f) => f.status === 'ready' && f.id) : [];
+    if (!message && !sendFiles.length) return;
+    const fileParam = sendFiles.length
+      ? `&attachments=${encodeURIComponent(sendFiles.map((f) => f.id).join(','))}` : '';
 
     // Start live session heartbeat on first user message. Heartbeat is the
     // sole trigger for portal-side "new visitor" notifications, so we start
@@ -5672,7 +5947,12 @@ function toggleMenu(open) {
     isStreamingState = true;
     userScrolledAway = false;
 
-    appendMessage(message, 'user', { skipScroll: true });
+    const userRow = appendMessage(message, 'user', { skipScroll: true, skipSave: sendFiles.length > 0 });
+    if (sendFiles.length) {
+      attachSentFiles(userRow, sendFiles);
+      clearPendingFiles();
+      saveChatHistory();
+    }
     chatInput.value = '';
     resizeTextarea(chatInput);
     // Stop visitor typing indicator when message is sent
@@ -5693,7 +5973,7 @@ function toggleMenu(open) {
       const url =
         `https://portal.ultimo-bots.com/api/chatbot_response?` +
         `user_input=${encodeURIComponent(message)}` +
-        `&session_id=${sessionId}&bot_id=${botId}&language=english`;
+        `&session_id=${sessionId}&bot_id=${botId}&language=english${fileParam}`;
       fetch(url).catch(() => {}); // fire-and-forget
       saveChatHistory();
       scrollToBottom();
@@ -5742,7 +6022,7 @@ function toggleMenu(open) {
     const url =
       `https://portal.ultimo-bots.com/api/chatbot_response?` +
       `user_input=${encodeURIComponent(message)}` +
-      `&session_id=${sessionId}&bot_id=${botId}&language=english`;
+      `&session_id=${sessionId}&bot_id=${botId}&language=english${fileParam}`;
 
     const finish = () => {
       setLoading(false);
