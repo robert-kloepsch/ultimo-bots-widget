@@ -3290,7 +3290,9 @@ async function initializeChatWidget() {
     if (!pendingFiles.length) { fileTray.hidden = true; fileTray.innerHTML = ''; return; }
     fileTray.hidden = false;
     fileTray.innerHTML = pendingFiles.map((f) => {
-      const preview = f.thumb ? `<img src="${fileEsc(f.thumb)}" alt="">` : `<span class="saicf-file-doc">${f.kind === 'image' ? 'IMG' : 'PDF'}</span>`;
+      // the extension on the tile ("PDF", "ZIP"): a refused file stays recognisable
+      const ext = String(f.name || '').includes('.') ? String(f.name).split('.').pop().slice(0, 4).toUpperCase() : 'FILE';
+      const preview = f.thumb ? `<img src="${fileEsc(f.thumb)}" alt="">` : `<span class="saicf-file-doc">${fileEsc(ext)}</span>`;
       const label = f.status === 'uploading' ? fileText.uploading : f.status === 'error' ? f.error : f.name;
       return `<div class="saicf-file-chip is-${f.status}" data-local="${fileEsc(f.localId)}" title="${fileEsc(label)}">${preview}` +
         `<span class="saicf-file-name">${fileEsc(label)}</span>` +
